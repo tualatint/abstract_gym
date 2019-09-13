@@ -25,18 +25,18 @@ class OccupancyGrid:
         self.occ = np.zeros((size, size))
         self.obstacle_list = []
         self.occ_coordinate = []
-        self.obstacle_side_length = environment_size/(size-1)
+        self.obstacle_side_length = environment_size / (size - 1)
         self.environment_size = environment_size
         self.size = size
         if random_obstacle:
             """
             Randomly generate obstacles.
             """
-            for i in range(size):
-                for j in range(size):
-                    if np.random.rand() < obstacle_probability:
-                        self.occ[i][j] = 1  # y x
-                        self.occ_coordinate.append([j, i])
+            rand_mat = np.random.random((size, size))
+            self.occ = np.where(rand_mat < obstacle_probability, 1, 0)
+            obstacles_y, obstacles_x = np.where(self.occ != 0)
+            for i in range(len(obstacles_x)):
+                self.occ_coordinate.append([obstacles_x[i], obstacles_y[i]])
         else:
             """
             Manually add obstacles. 
@@ -57,7 +57,7 @@ class OccupancyGrid:
         scale, shift center,
         """
         self.occ_coordinate = np.array(self.occ_coordinate) * self.environment_size / (
-                    self.size - 1) - self.environment_size / 2.0
+                self.size - 1) - self.environment_size / 2.0
         """ 
         flip
         """
@@ -85,25 +85,18 @@ class OccupancyGrid:
         self.occ = np.copy(matrix)
         self.obstacle_list.clear()
         self.occ_coordinate = []
-        self.obstacle_side_length = environment_size/(self.size-1)
+        self.obstacle_side_length = environment_size / (self.size - 1)
         self.environment_size = environment_size
-        for i in range(self.size):
-            for j in range(self.size):
-                if self.occ[i][j] != 0:  # y x
-                    self.occ_coordinate.append([j, i])
+        obstacles_y, obstacles_x = np.where(self.occ != 0)
+        for i in range(len(obstacles_x)):
+            self.occ_coordinate.append([obstacles_x[i], obstacles_y[i]])
         self.transform_frame()
 
 
-
-
 if __name__ == "__main__":
-    mat = np.array([[0, 0, 1], [1, 0, 0], [0, 1, 1]])
-    print(np.where(mat!=0))
+    mat = np.array([[0, 0, 1, 0, 0], [0, 1, 1, 0, 0], [0, 1, 1, 0, 0], [0, 0, 0, 0, 0], [0, 1, 0, 0, 1]])
     oc = OccupancyGrid(201)
-    oc.load_from_matrix(mat)
+    #oc.load_from_matrix(mat)
     occ, occ_c, ob_l, _ = oc.get_occupancy_grid()
-
     print(occ)
     print(len(occ_c))
-
-

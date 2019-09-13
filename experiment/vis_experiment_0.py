@@ -4,9 +4,9 @@ from abstract_gym.environment.occupancy_grid import OccupancyGrid
 from abstract_gym.scenario.scene_0 import Scene
 import numpy as np
 
-rob = TwoJointRobot()
 occ = OccupancyGrid(size=31, random_obstacle=True, obstacle_probability=0.01)
-s = Scene(robot=rob, env=occ, visualize=True)
+#occ = OccupancyGrid(random_obstacle=False)
+s = Scene(env=occ, visualize=True)
 s.random_valid_pose()
 record = []
 record_list = []

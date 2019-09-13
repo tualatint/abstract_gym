@@ -70,3 +70,51 @@ class TwoJointRobot:
         """
         self.joint_1 += d1
         self.joint_2 += d2
+
+    def cart_target_valid_check(self, target_c):
+        """
+        Check the specified target cartesian pose is reachable or not
+        :param target_c: specified cartesian pose of end effector
+        :return: Bool
+        """
+        R = self.total_length()
+        r = abs(self.link_1 - self.link_2)
+        radius = np.sqrt(pow(target_c.x, 2) + pow(target_c.y, 2))
+        if r < radius <= R:
+            return True, radius
+        else:
+            return False, radius
+
+    def inverse_kinematic(self, target_c):
+        """
+        Compute the joint value for a given end effector cartesian pose using cosine theorem.
+        :param target_c: end effector cartesian pose.
+        :return: joint value j1 , j2
+        """
+        valid, radius = self.cart_target_valid_check(target_c)
+        if valid:
+            if radius == 0:
+                print("link_1 equals link 2 and the target is at origin, infinite many solutions.")
+                return None, None
+            cos_theta = (pow(radius, 2) + pow(self.link_1, 2) - pow(self.link_2, 2)) / (2.0 * self.link_1 * radius)
+            theta = np.arccos(cos_theta)
+            cos_alpha = target_c.x / radius
+            alpha = np.arccos(cos_alpha)
+            j1_1 = alpha - theta
+            j1_2 = alpha + theta
+            cos_beta = (pow(self.link_1, 2) + pow(self.link_2, 2) - pow(radius, 2)) / (2.0 * self.link_1 * self.link_2)
+            j2_1 = np.pi - np.arccos(cos_beta) + j1_1
+            j2_2 = j1_2 - (np.pi - np.arccos(cos_beta))
+            s1 = np.array([j1_1, j2_1])
+            s2 = np.array([j1_2, j2_2])
+            return s1, s2
+        else:
+            print("Target out of reach.")
+            return None, None
+
+if __name__=="__main__":
+    tar = Point(0.5, 0.0)
+    robot = TwoJointRobot()
+    s1, s2 = robot.inverse_kinematic(tar)
+    print("s1 :", s1)
+    print("s2 :", s2)

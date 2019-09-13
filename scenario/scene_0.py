@@ -4,17 +4,25 @@ from matplotlib.path import Path
 import matplotlib.patches as patches
 
 import __init__
+from abstract_gym.robot.two_joint_robot import TwoJointRobot
+from abstract_gym.environment.occupancy_grid import OccupancyGrid
 from abstract_gym.utils.collision_checker import CollisionChecker
 from abstract_gym.utils.geometry import Point, Line
 
 
 class Scene:
     def __init__(self,
-                 robot,
-                 env,
+                 robot=TwoJointRobot(),
+                 env=OccupancyGrid(),
                  target_c=Point(-0.2, -0.3),
                  visualize=False):
-
+        """
+        Initialize the scene with a robot and environment
+        :param robot: the robot instance
+        :param env: the obstacles represented as occupancy grid
+        :param target_c: cartesian target pose
+        :param visualize: Bool, whether the scene is rendered
+        """
         self.robot = robot
         self.occ_matrix, self.occ_coord, self.obstacle_list, self.obstacle_side_length = env.get_occupancy_grid()
         self.vis = visualize
@@ -22,7 +30,13 @@ class Scene:
         self.target_j = np.array([1.1, -0.2])
         self.choose_j_tar = False
         self.step_reward = 0
+        """
+        collision_status: finishes one episode by colliding with obstacles.
+        """
         self.collision_status = False
+        """
+        done: successfully finishes one episode by reaching the target.
+        """
         self.done = False
         if self.vis:
             plt.ion()
@@ -130,20 +144,6 @@ class Scene:
         self.ee_vis.set_ydata([self.robot.EE.y])
         self.ee_vis.set_xdata([self.robot.EE.x])
         self.fig.canvas.draw()
-
-    def cart_target_valid_check(self, target_c):
-        """
-        Check the specified target cartesian pose is reachable or not
-        :param target_c: specified cartesian pose of end effector
-        :return: Bool
-        """
-        R = self.robot.total_length()
-        r = self.robot.link_1 - self.robot.link_2
-        radius = np.sqrt(pow(target_c.x, 2) + pow(target_c.y, 2))
-        if r < radius < R:
-            return True
-        else:
-            return False
 
     def occ_to_patch(self):
         """
