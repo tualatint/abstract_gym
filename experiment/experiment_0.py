@@ -17,7 +17,7 @@ def thread_function(num, r_list):
     record = []
     record_list = []
     succ = False
-    for i in range(np.int64(1e5)):
+    for i in range(np.int64(1e6)):
         action = s.sample_action(scale_factor=0.1)
         j1, j2, step_reward, done, collision = s.step(action)
         record.append(
@@ -51,7 +51,7 @@ if __name__ == "__main__":
         thread.join()
 
     print("Total records:", len(multi_list))
-    with open('data_list.txt', 'w') as f:
+    with open('data_list_32e6.txt', 'w') as f:
         for l in multi_list:
             for d in l:
                 f.write("%s\n" % d)

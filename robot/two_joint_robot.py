@@ -70,6 +70,14 @@ class TwoJointRobot:
         """
         self.joint_1 += d1
         self.joint_2 += d2
+        if self.joint_1 > np.pi * 2.0:
+            self.joint_1 -= np.pi * 2.0
+        if self.joint_2 > np.pi * 2.0:
+            self.joint_2 -= np.pi * 2.0
+        if self.joint_1 < 0:
+            self.joint_1 += np.pi * 2.0
+        if self.joint_2 < 0:
+            self.joint_2 += np.pi * 2.0
 
     def cart_target_valid_check(self, target_c):
         """
