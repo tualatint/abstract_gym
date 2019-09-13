@@ -9,7 +9,6 @@ class OccupancyGrid:
                  size=9,
                  random_obstacle=True,
                  obstacle_probability=0.1,
-                 obstacle_side_length=0.2,
                  environment_size=1.6
                  ):
         """
@@ -17,17 +16,18 @@ class OccupancyGrid:
         occ is the abstract matrix form.
         obstacle_list is the list of obstacles represented in square.
         occ_coordinate is the list of obstacles's bottom left point.
+
         :param size: the whole environment is divided into a size * size occupancy grid.
         :param random_obstacle: Bool, whether random obstacles are generated.
         :param obstacle_probability: if randomly generates obstacles, this value specify the probability of one grid been occupied.
-        :param obstacle_side_length: assume every obstacle is a square, this value specify its side length in meter.
         :param environment_size: side length of the whole environment in meter.
         """
         self.occ = np.zeros((size, size))
         self.obstacle_list = []
         self.occ_coordinate = []
-        self.obstacle_side_length = obstacle_side_length
+        self.obstacle_side_length = environment_size/(size-1)
         self.environment_size = environment_size
+        self.size = size
         if random_obstacle:
             """
             Randomly generate obstacles.
@@ -49,12 +49,15 @@ class OccupancyGrid:
             self.occ_coordinate.append([7, 5])
             self.occ_coordinate.append([3, 2])
 
+        self.transform_frame()
+
+    def transform_frame(self):
         """
         Transform the occupancy grid coordinate from the matrix row col index to the robot_0 frame.
         scale, shift center,
         """
         self.occ_coordinate = np.array(self.occ_coordinate) * self.environment_size / (
-                    size - 1) - self.environment_size / 2.0
+                    self.size - 1) - self.environment_size / 2.0
         """ 
         flip
         """
@@ -65,11 +68,42 @@ class OccupancyGrid:
             self.obstacle_list.append(s)
 
     def get_occupancy_grid(self):
-        return self.occ, self.occ_coordinate, self.obstacle_list
+        return self.occ, self.occ_coordinate, self.obstacle_list, self.obstacle_side_length
+
+    def load_from_matrix(self, matrix, environment_size=1.6):
+        """
+        Load the occupancy grid from a numpy matrix.
+        :param matrix: numpy 2d array
+        :param environment_size: side length of the whole environment in meter.
+        :return:
+        """
+        if matrix.shape[0] != matrix.shape[1]:
+            print("The matrix is not square.")
+            return
+
+        self.size = matrix.shape[0]
+        self.occ = np.copy(matrix)
+        self.obstacle_list.clear()
+        self.occ_coordinate = []
+        self.obstacle_side_length = environment_size/(self.size-1)
+        self.environment_size = environment_size
+        for i in range(self.size):
+            for j in range(self.size):
+                if self.occ[i][j] != 0:  # y x
+                    self.occ_coordinate.append([j, i])
+        self.transform_frame()
+
+
 
 
 if __name__ == "__main__":
+    mat = np.array([[0, 0, 1], [1, 0, 0], [0, 1, 1]])
+    print(np.where(mat!=0))
     oc = OccupancyGrid(201)
-    occ, occ_c, ob_l = oc.get_occupancy_grid()
+    oc.load_from_matrix(mat)
+    occ, occ_c, ob_l, _ = oc.get_occupancy_grid()
+
     print(occ)
     print(len(occ_c))
+
+
