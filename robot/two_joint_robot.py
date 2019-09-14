@@ -70,6 +70,13 @@ class TwoJointRobot:
         """
         self.joint_1 += d1
         self.joint_2 += d2
+        self.joint_range_check()
+
+    def joint_range_check(self):
+        """
+        If the joint value is out side the range [0, 2*pi], change it back.
+        :return:
+        """
         if self.joint_1 > np.pi * 2.0:
             self.joint_1 -= np.pi * 2.0
         if self.joint_2 > np.pi * 2.0:
@@ -120,7 +127,8 @@ class TwoJointRobot:
             print("Target out of reach.")
             return None, None
 
-if __name__=="__main__":
+
+if __name__ == "__main__":
     tar = Point(0.5, 0.0)
     robot = TwoJointRobot()
     s1, s2 = robot.inverse_kinematic(tar)

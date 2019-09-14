@@ -62,8 +62,8 @@ class Scene:
         Check whether the robot is in collision with the obstacles.
         :return: Bool, if it is in collision
         """
-        l1 = Line(Point(0, 0), Point(self.robot.elbow_point().x, self.robot.elbow_point().y))
-        l2 = Line(Point(self.robot.elbow_point().x, self.robot.elbow_point().y), Point(self.robot.end_effector().x, self.robot.end_effector().y))
+        l1 = Line(Point(0, 0), self.robot.elbow_point())
+        l2 = Line(self.robot.elbow_point(), self.robot.end_effector())
         for index, ob in enumerate(self.obstacle_list):
             l1c = CollisionChecker(l1, ob)
             c_1 = l1c.collision_check()
@@ -176,6 +176,8 @@ class Scene:
         Randomly sample a collision free joint pose.
         :return:
         """
-        while self.collision_check():
+        condition = True
+        while condition:
             self.robot.joint_1 = np.random.rand() * np.pi * 2.0
             self.robot.joint_2 = np.random.rand() * np.pi * 2.0
+            condition = self.collision_check()
