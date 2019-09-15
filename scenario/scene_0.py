@@ -85,6 +85,9 @@ class Scene:
         d2 = (np.random.rand() - 0.5) * scale_factor
         return np.array([d1, d2])
 
+    def zero_action(self):
+        return np.array([0.0, 0.0])
+
     def step(self, action):
         """
         Move the robot according to the action and check the result.

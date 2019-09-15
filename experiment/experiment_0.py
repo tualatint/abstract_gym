@@ -28,7 +28,7 @@ def thread_function(thread_index, r_list):
     record = []
     record_list = []
     succ = 0.0
-    total_steps = np.int64(1e6)
+    total_steps = np.int64(1e5)
     for i in range(total_steps):
         action = s.sample_action(scale_factor=0.1)
         j1, j2, step_reward, done, collision = s.step(action)
@@ -52,7 +52,7 @@ def thread_function(thread_index, r_list):
 if __name__ == "__main__":
     start = time.time()
     threads = list()
-    thread_num = 16
+    thread_num = 8
     multi_list = [None] * thread_num
     """
     Starting multi-thread
@@ -67,7 +67,7 @@ if __name__ == "__main__":
     """
     Save the data.
     """
-    with open('data_list_16e6.txt', 'w') as f:
+    with open('data_list_8e5.txt', 'w') as f:
         for l in multi_list:
             for d in l:
                 f.write("%s\n" % d)

@@ -1,6 +1,7 @@
 import torch
 from torch.utils import data
 import numpy as np
+import threading
 
 import __init__
 from abstract_gym.utils.dataloader import Sampler, read_file_into_list
@@ -17,6 +18,7 @@ class Q_net(torch.nn.Module):
         super(Q_net, self).__init__()
         self.fc1 = torch.nn.Linear(4, 64)
         self.fc3 = torch.nn.Linear(64, 1)
+        self.lock = threading.Lock()
 
     def forward(self, x):
         x = self.fc1(x)
@@ -49,9 +51,9 @@ if __name__ == "__main__":
     """
     file_path = '../data/data_list_10e6.txt'
     record_list = read_file_into_list(file_path)
-    s = Sampler(record_list)
+    sampler = Sampler(record_list)
     params = {"batch_size": 6400, "shuffle": True, "num_workers": 4}
-    training_generator = data.DataLoader(s, **params)
+    training_generator = data.DataLoader(sampler, **params)
     """
     Define network.
     """
@@ -78,7 +80,7 @@ if __name__ == "__main__":
                 loss.backward()
                 optimizer.step()
             print("Epoch {}: {:.4f}".format(epoch, total_loss / iteration))
-    except (KeyboardInterrupt, SystemExit,RuntimeError):
+    except (KeyboardInterrupt, SystemExit, RuntimeError):
         model_file_name = "q_net_v1_1e7_1.pth"
         torch.save(Q.state_dict(), "../models/" + model_file_name)
         print("Model file: " + model_file_name + " saved.")
