@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.path import Path
 import matplotlib.patches as patches
+from numpy import linalg as LA
 
 import __init__
 from abstract_gym.robot.two_joint_robot import TwoJointRobot
@@ -84,6 +85,14 @@ class Scene:
         d1 = (np.random.rand() - 0.5) * scale_factor
         d2 = (np.random.rand() - 0.5) * scale_factor
         return np.array([d1, d2])
+
+    def Jacobian_controller(self, goal, scale_factor=0.1):
+        jmat = self.robot.Jacobian_matrix()
+        EE = self.robot.end_effector()
+        displacement = scale_factor * np.array([goal.x - EE.x, goal.y - EE.y])
+        displacement = displacement.reshape(2, -1)
+        action = np.asmatrix(jmat.transpose() * jmat).getI() * jmat.transpose() * displacement
+        return action
 
     def zero_action(self):
         return np.array([0.0, 0.0])
@@ -184,3 +193,28 @@ class Scene:
             self.robot.joint_1 = np.random.rand() * np.pi * 2.0
             self.robot.joint_2 = np.random.rand() * np.pi * 2.0
             condition = self.collision_check()
+
+
+if __name__ == "__main__":
+    occ = OccupancyGrid(random_obstacle=False)
+    scene = Scene(visualize=True, env=occ)
+    step = 0
+    scene.random_valid_pose()
+    while True:
+        step += 1
+        action = scene.Jacobian_controller(goal=scene.target_c)
+        print("action :", LA.norm(action))
+        scene.robot.move_delta(action[0], action[1])
+        if scene.collision_check():
+            print("collision reset.")
+            scene.random_valid_pose()
+            step = 0
+        if scene.check_target_reached():
+            print("succ reset.")
+            scene.random_valid_pose()
+            step = 0
+        if step > 100:
+            print("over step reset.")
+            scene.random_valid_pose()
+            step = 0
+        scene.render()

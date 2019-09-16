@@ -127,10 +127,22 @@ class TwoJointRobot:
             print("Target out of reach.")
             return None, None
 
+    def Jacobian_matrix(self):
+        return np.array([np.squeeze([-self.link_1 * np.sin(self.joint_1), -self.link_2 * np.sin(self.joint_2)]),
+                         np.squeeze([self.link_1 * np.cos(self.joint_1), self.link_2 * np.cos(self.joint_2)])])
+
+
 
 if __name__ == "__main__":
     tar = Point(0.5, 0.0)
     robot = TwoJointRobot()
-    s1, s2 = robot.inverse_kinematic(tar)
-    print("s1 :", s1)
-    print("s2 :", s2)
+    J_mat = robot.Jacobian_matrix()
+    print("J mat :", J_mat)
+    A = J_mat * J_mat.transpose()
+    B = J_mat.transpose() * J_mat
+    print("A mat :", A)
+    print("B mat :", B)
+    print("inverse J :", np.asmatrix(J_mat).getI())
+    #s1, s2 = robot.inverse_kinematic(tar)
+    #print("s1 :", s1)
+    #print("s2 :", s2)

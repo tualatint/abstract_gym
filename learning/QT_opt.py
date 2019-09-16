@@ -55,7 +55,10 @@ class RingOfflineData:
 
     def __init__(self, data_file_path, capacity=np.int64(1e7)):
         self.capacity = capacity
-        self.memory = read_file_into_sars_list(data_file_path)
+        if data_file_path is None:
+            self.memory = []
+        else:
+            self.memory = read_file_into_sars_list(data_file_path)
         self.position = np.int64(0)
         self.data_file_path = data_file_path
         self.new_data_to_be_appended = []
@@ -89,12 +92,15 @@ class RingOfflineData:
         Get S, A, R, S'
         :return:
         """
+        sars_raw_list = []
         try:
             self.lock.acquire()
-            sars_list = random.sample(self.memory, batch_size)
+            if batch_size > len(self.memory):
+                return []
+            sars_raw_list = random.sample(self.memory, batch_size)
         finally:
             self.lock.release()
-            sars_list = [x for x in sars_list if x is not None]
+            sars_list = [x for x in sars_raw_list if x is not None]
             sars_list = np.array(sars_list)
         return sars_list
 

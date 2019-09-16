@@ -2,9 +2,10 @@ import torch
 import numpy as np
 import threading
 import time
+import math
 
 import __init__
-from abstract_gym.learning.mc_Q_net import Q_net, choose_action
+from abstract_gym.learning.mc_Q_net import Q_net, Q_net2, choose_action
 from abstract_gym.environment.occupancy_grid import OccupancyGrid
 from abstract_gym.scenario.scene_0 import Scene
 from abstract_gym.learning.QT_opt import  BellmanUpdater, EpsilonGreedyPolicyFunction, RingBuffer, RingOfflineData
@@ -20,15 +21,16 @@ def labeler_thread_function(q_net, offline_data, buffer):
     :return:
     """
     print("Starting labeler thread...")
-    batch_size = 10
-    try:
-        while True:
-            sars = offline_data.sample(batch_size=batch_size)
-            bellman_updater = BellmanUpdater(q_net, sars)
-            sa, qt = bellman_updater.get_labeled_data()
-            buffer.insert_labeled_data(sa, qt)
-    except:
-        print("Sars:", sars)
+    batch_size = 1000
+
+    while True:
+        sars = offline_data.sample(batch_size=batch_size)
+        if len(sars) == 0:
+            continue
+        bellman_updater = BellmanUpdater(q_net, sars)
+        sa, qt = bellman_updater.get_labeled_data()
+        buffer.insert_labeled_data(sa, qt)
+
 
 def training_thread_function(q_net, buffer):
     """
@@ -39,7 +41,7 @@ def training_thread_function(q_net, buffer):
     print("Starting Training thread...")
     criterion = torch.nn.MSELoss()
     optimizer = torch.optim.Adam(q_net.parameters(), lr=1e-4, weight_decay=1e-5)
-    batch_size = 10
+    batch_size = 1000
     while True:
         if len(buffer) > batch_size:
             saqt = buffer.sample(batch_size)
@@ -63,16 +65,16 @@ def training_thread_function(q_net, buffer):
 if __name__ == "__main__":
     threads = list()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    Q = Q_net().to(device)
-    Q.load_state_dict(torch.load("../models/q_net_v1_4866_2.pth"))
+    Q = Q_net2().to(device)
+    Q.load_state_dict(torch.load("../models/q_net2_v1_4600_108.pth"))
     occ = OccupancyGrid(random_obstacle=False)
     scene = Scene(env=occ, visualize=True)
     scene.random_valid_pose()
     record = []
     record_list = []
     file_path = '../data/data_list_8e5.txt'
-    offline_data = RingOfflineData(file_path)
-    buffer = RingBuffer(capacity=5000)
+    offline_data = RingOfflineData(None)
+    buffer = RingBuffer(capacity=np.int64(1e9))
 
     """
     Starting multi-thread
@@ -89,45 +91,60 @@ if __name__ == "__main__":
     print("Starting main thread...")
     step = 0
     state = np.zeros((2))
-    epsilon = 0.8
+    epsilon = 0.0
     succ = 0
     epoches = 0
-    for i in range(np.int64(1e6)):
-        step += 1
-        if i == 0:
-            action = scene.zero_action()
-        else:
-            policy = EpsilonGreedyPolicyFunction(Q, state, epsilon=epsilon)
-            action = policy.choose_action()
+    max_stage = 10000
+    EPS_START = 0.06
+    EPS_END = 0.05
+    EPS_DECAY = np.int64(1e8)
+    total_steps = np.int64(0)
+    last_epoch = 0
+    last_succ = 0
+    for k in range(max_stage):
+        epsilon = EPS_END + (EPS_START - EPS_END) * math.exp(-1. * total_steps / EPS_DECAY)
+        print("Epsilon : ", epsilon)
+        for i in range(np.int64(1e5)):
+            step += 1
+            total_steps += 1
+            if i == 0:
+                action = scene.zero_action()
+            else:
+                policy = EpsilonGreedyPolicyFunction(Q, state, epsilon=epsilon)
+                action = policy.choose_action()
 
-        j1, j2, step_reward, done, collision = scene.step(action)
-        state = np.array([j1, j2])
-        record.append(
-            [j1, j2, action[0], action[1], step_reward]
-        )
-        if step != 1:
-            offline_data.insert_sars([last_j1, last_j2, action[0], action[1], step_reward, j1, j2])
-        last_j1 = j1
-        last_j2 = j2
-        # print("j1, j2, action, step_reward, done, collision : ", j1, j2, action[0], action[1], step_reward, done, collision)
-        if done:
-            succ += 1
-            print("-----------------------!!!!!!!!!!!!!!  UNBELIEVABLE !!!!!!!!!!!!!!!!-------------------------------")
-        if done or collision:
-            step = 0
-            epoches += 1
-            record_list.append(record.copy())
-            offline_data.insert_record(record.copy())
-            record.clear()
-            print("reset at step ", i)
-            scene.reset()
-
-    print("Finished main loop with succ rate : ", succ/epoches)
-    exp_num = 4
-    model_file_name = "q_net_v2_" + str(len(record_list)) + "_" + str(exp_num) + ".pth"
-    torch.save(Q.state_dict(), "../models/" + model_file_name)
-    print("Model file: " + model_file_name + " saved.")
-    offline_data.write_file('../data/online_data_list.txt')
+            j1, j2, step_reward, done, collision = scene.step(action)
+            state = np.array([j1, j2])
+            record.append(
+                [j1, j2, action[0], action[1], step_reward]
+            )
+            if step != 1:
+                offline_data.insert_sars([last_j1, last_j2, action[0], action[1], step_reward, j1, j2])
+            last_j1 = j1
+            last_j2 = j2
+            # print("j1, j2, action, step_reward, done, collision : ", j1, j2, action[0], action[1], step_reward, done, collision)
+            if done:
+                succ += 1
+                #print("-----------------------!!!!!!!!!!!!!!  UNBELIEVABLE !!!!!!!!!!!!!!!!-------------------------------")
+            if done or collision:
+                step = 0
+                epoches += 1
+                record_list.append(record.copy())
+                offline_data.insert_record(record.copy())
+                record.clear()
+                #print("reset at step ", i)
+                scene.reset()
+        if epoches - last_epoch != 0:
+            print("Finished main loop with succ rate : {:.4f} in {} epoches." .format(((succ - last_succ)/(epoches - last_epoch)), (epoches - last_epoch)))
+        print("Buffer : ", buffer.__len__())
+        print("Offline data : ", offline_data.__len__())
+        last_epoch = epoches
+        last_succ = succ
+        exp_num = 6
+        model_file_name = "q_net2_v1_" + str(len(record_list)) + "_" + str(k) + ".pth"
+        torch.save(Q.state_dict(), "../models/" + model_file_name)
+        print("Model file: " + model_file_name + " saved.")
+        offline_data.write_file('../data/online_data_list.txt')
 
     for index, thread in enumerate(threads):
         thread.join()
