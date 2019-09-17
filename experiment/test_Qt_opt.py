@@ -11,40 +11,40 @@ from abstract_gym.scenario.scene_0 import Scene
 from abstract_gym.learning.QT_opt import  BellmanUpdater, EpsilonGreedyPolicyFunction, RingBuffer, RingOfflineData
 
 
-def labeler_thread_function(q_net, offline_data, buffer):
+def labeler_thread_function(q_net, offline_data_ring_buffer, ring_buffer):
     """
     The labeler thread pulls data from offline data set and label it using bellman updater.
     Then the labeled data is saved in the training buffer.
     :param q_net:
-    :param offline_data:
-    :param buffer:
+    :param offline_data_ring_buffer:
+    :param ring_buffer:
     :return:
     """
     print("Starting labeler thread...")
     batch_size = 1000
 
     while True:
-        sars = offline_data.sample(batch_size=batch_size)
+        sars = offline_data_ring_buffer.sample(batch_size=batch_size)
         if len(sars) == 0:
             continue
         bellman_updater = BellmanUpdater(q_net, sars)
         sa, qt = bellman_updater.get_labeled_data()
-        buffer.insert_labeled_data(sa, qt)
+        ring_buffer.insert_labeled_data(sa, qt)
 
 
-def training_thread_function(q_net, buffer):
+def training_thread_function(q_net, ring_buffer):
     """
     This Thread updates the Q network parameters by minimizing the error of current output Q value and the labeled data.
+    :param ring_buffer:
     :param q_net:
     :return:
     """
     print("Starting Training thread...")
     criterion = torch.nn.MSELoss()
     optimizer = torch.optim.Adam(q_net.parameters(), lr=1e-4, weight_decay=1e-5)
-    batch_size = 1000
     while True:
-        if len(buffer) > batch_size:
-            saqt = buffer.sample(batch_size)
+        if len(ring_buffer) > 0:
+            saqt = ring_buffer.sample()
             x = saqt[0][0]
             y = saqt[0][1]
             x = x.to(device, dtype=torch.float)
@@ -66,15 +66,15 @@ if __name__ == "__main__":
     threads = list()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     Q = Q_net2().to(device)
-    Q.load_state_dict(torch.load("../models/q_net2_v1_4600_108.pth"))
+    Q.load_state_dict(torch.load("../models/q_net2_v1_3766_23.pth"))
     occ = OccupancyGrid(random_obstacle=False)
-    scene = Scene(env=occ, visualize=True)
+    scene = Scene(env=occ, visualize=False)
     scene.random_valid_pose()
     record = []
     record_list = []
-    file_path = '../data/data_list_8e5.txt'
-    offline_data = RingOfflineData(None)
-    buffer = RingBuffer(capacity=np.int64(1e9))
+    file_path = '../data/data_list_10e6.txt'
+    offline_data = RingOfflineData(file_path, capacity=np.int64(7e7))
+    buffer = RingBuffer(capacity=np.int64(1e5))
 
     """
     Starting multi-thread
@@ -95,12 +95,15 @@ if __name__ == "__main__":
     succ = 0
     epoches = 0
     max_stage = 10000
-    EPS_START = 0.06
+    EPS_START = 0.80
     EPS_END = 0.05
     EPS_DECAY = np.int64(1e8)
     total_steps = np.int64(0)
     last_epoch = 0
     last_succ = 0
+    while buffer.__len__() < np.int64(1e2):
+        print("Buffer : ", buffer.__len__())
+        time.sleep(1)
     for k in range(max_stage):
         epsilon = EPS_END + (EPS_START - EPS_END) * math.exp(-1. * total_steps / EPS_DECAY)
         print("Epsilon : ", epsilon)
@@ -144,7 +147,7 @@ if __name__ == "__main__":
         model_file_name = "q_net2_v1_" + str(len(record_list)) + "_" + str(k) + ".pth"
         torch.save(Q.state_dict(), "../models/" + model_file_name)
         print("Model file: " + model_file_name + " saved.")
-        offline_data.write_file('../data/online_data_list.txt')
+        offline_data.write_file('../data/online_data_list2.txt')
 
     for index, thread in enumerate(threads):
         thread.join()

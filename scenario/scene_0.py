@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 from matplotlib.path import Path
 import matplotlib.patches as patches
 from numpy import linalg as LA
+import time
 
 import __init__
 from abstract_gym.robot.two_joint_robot import TwoJointRobot
@@ -49,6 +50,8 @@ class Scene:
             self.ax.set_ylim(-robot_length * env_vis_scale, robot_length * env_vis_scale)
             self.ax.grid()
             patch_list = self.occ_to_patch()
+            circle1 = plt.Circle((0, 0), 0.1, color='r', fill=False)
+            self.ax.add_artist(circle1)
             for p in patch_list:
                 self.ax.add_patch(p)
             self.robot_body_line_vis, self.ee_vis, self.target_c_vis = self.ax.plot(
@@ -92,7 +95,7 @@ class Scene:
         displacement = scale_factor * np.array([goal.x - EE.x, goal.y - EE.y])
         displacement = displacement.reshape(2, -1)
         action = np.asmatrix(jmat.transpose() * jmat).getI() * jmat.transpose() * displacement
-        return action
+        return action, np.linalg.det(jmat.transpose() * jmat)
 
     def zero_action(self):
         return np.array([0.0, 0.0])
@@ -202,8 +205,12 @@ if __name__ == "__main__":
     scene.random_valid_pose()
     while True:
         step += 1
-        action = scene.Jacobian_controller(goal=scene.target_c)
-        print("action :", LA.norm(action))
+        action, det = scene.Jacobian_controller(goal=scene.target_c)
+        if LA.norm(action) > 1:
+            print("action :", LA.norm(action))
+            print("det :", det)
+            scene.render()
+            time.sleep(2)
         scene.robot.move_delta(action[0], action[1])
         if scene.collision_check():
             print("collision reset.")

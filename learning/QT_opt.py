@@ -139,7 +139,7 @@ class RingBuffer:
         finally:
             self.lock.release()
 
-    def sample(self, batch_size):
+    def sample(self, batch_size=1):
         try:
             self.lock.acquire()
             element = random.sample(self.memory, batch_size)
@@ -183,3 +183,7 @@ class EpsilonGreedyPolicyFunction:
 
 if __name__ =="__main__":
     pass
+    # a = np.random.rand(np.int64(1e7), 2)
+    # a = a.tolist()
+    # b = random.sample(a, 1)
+    # print(b)
