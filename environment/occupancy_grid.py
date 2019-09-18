@@ -56,6 +56,8 @@ class OccupancyGrid:
         Transform the occupancy grid coordinate from the matrix row col index to the robot_0 frame.
         scale, shift center,
         """
+        if len(self.occ_coordinate) == 0:
+            return
         self.occ_coordinate = np.array(self.occ_coordinate) * self.environment_size / (
                 self.size - 1) - self.environment_size / 2.0
         """ 

@@ -66,14 +66,14 @@ if __name__ == "__main__":
     threads = list()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     Q = Q_net2().to(device)
-    Q.load_state_dict(torch.load("../models/q_net2_v1_3766_23.pth"))
+    Q.load_state_dict(torch.load("../models/q_net2_v1_1824_3.pth"))
     occ = OccupancyGrid(random_obstacle=False)
     scene = Scene(env=occ, visualize=False)
     scene.random_valid_pose()
     record = []
     record_list = []
     file_path = '../data/data_list_10e6.txt'
-    offline_data = RingOfflineData(file_path, capacity=np.int64(7e7))
+    offline_data = RingOfflineData(None, capacity=np.int64(7e7))
     buffer = RingBuffer(capacity=np.int64(1e5))
 
     """
@@ -94,16 +94,13 @@ if __name__ == "__main__":
     epsilon = 0.0
     succ = 0
     epoches = 0
-    max_stage = 10000
-    EPS_START = 0.80
+    max_stage = 1000
+    EPS_START = 0.7
     EPS_END = 0.05
-    EPS_DECAY = np.int64(1e8)
+    EPS_DECAY = np.int64(1e7)
     total_steps = np.int64(0)
     last_epoch = 0
     last_succ = 0
-    while buffer.__len__() < np.int64(1e2):
-        print("Buffer : ", buffer.__len__())
-        time.sleep(1)
     for k in range(max_stage):
         epsilon = EPS_END + (EPS_START - EPS_END) * math.exp(-1. * total_steps / EPS_DECAY)
         print("Epsilon : ", epsilon)
@@ -129,13 +126,17 @@ if __name__ == "__main__":
             if done:
                 succ += 1
                 #print("-----------------------!!!!!!!!!!!!!!  UNBELIEVABLE !!!!!!!!!!!!!!!!-------------------------------")
-            if done or collision:
+            if done or collision :
                 step = 0
                 epoches += 1
                 record_list.append(record.copy())
                 offline_data.insert_record(record.copy())
                 record.clear()
                 #print("reset at step ", i)
+                scene.reset()
+            if step > 100:
+                step = 0
+                record.clear()
                 scene.reset()
         if epoches - last_epoch != 0:
             print("Finished main loop with succ rate : {:.4f} in {} epoches." .format(((succ - last_succ)/(epoches - last_epoch)), (epoches - last_epoch)))
@@ -144,7 +145,7 @@ if __name__ == "__main__":
         last_epoch = epoches
         last_succ = succ
         exp_num = 6
-        model_file_name = "q_net2_v1_" + str(len(record_list)) + "_" + str(k) + ".pth"
+        model_file_name = "q_net2_v2_" + str(len(record_list)) + "_" + str(k) + ".pth"
         torch.save(Q.state_dict(), "../models/" + model_file_name)
         print("Model file: " + model_file_name + " saved.")
         offline_data.write_file('../data/online_data_list2.txt')

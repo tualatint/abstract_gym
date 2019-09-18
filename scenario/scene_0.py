@@ -229,19 +229,19 @@ class Scene:
         alpha = 1.0 / steps
         init_j1 = self.robot.joint_1
         init_j2 = self.robot.joint_2
+        target_j1 = self.find_nearest_target(init_j1, target_j1)
+        target_j2 = self.find_nearest_target(init_j2, target_j2)
         for i in range(steps):
             self.robot.joint_1 += alpha * (target_j1 - init_j1)
             self.robot.joint_2 += alpha * (target_j2 - init_j2)
             self.render()
-            if self.robot.joint_range_check():
-                print("collision reset.")
-                self.random_valid_pose()
             if scene.check_target_reached():
                 print("succ reset.")
                 self.random_valid_pose()
             if scene.collision_check():
                 print("collision reset.")
                 scene.random_valid_pose()
+        self.robot.joint_range_check()
 
     def generate_random_target_c(self):
         condition = False
@@ -251,25 +251,30 @@ class Scene:
             condition = self.robot.cart_target_valid_check(Point(x, y))
         return Point(x, y)
 
+    def find_nearest_target(self, v1, v2):
+        d0 = abs(v1 - v2)
+        d1 = abs(v1 - v2 + 2 * np.pi)
+        d2 = abs(v1 - v2 - 2 * np.pi)
+        index = np.argmin([d0, d1, d2])
+        v3 = [v2, v2 - 2 * np.pi, v2 + 2 * np.pi]
+        return v3[index]
+
+    def find_min_distance(self, v1, v2):
+        d0 = abs(v1 - v2)
+        d1 = abs(v1 - v2 + 2 * np.pi)
+        d2 = abs(v1 - v2 - 2 * np.pi)
+        d = np.min([d0, d1, d2])
+        return d
+
     def choose_inv_ik_with_min_j_distance(self, s1, s2):
         if s1 is None or s2 is None:
             return None, None, None
-        d10 = abs(self.robot.joint_1 - s1[0]) + abs(self.robot.joint_2 - s1[1])
-        d20 = abs(self.robot.joint_1 - s2[0]) + abs(self.robot.joint_2 - s2[1])
-        d11 = abs(self.robot.joint_1 - s1[0] - 2 * np.pi) + abs(self.robot.joint_2 - s1[1])
-        d21 = abs(self.robot.joint_1 - s2[0] - 2 * np.pi) + abs(self.robot.joint_2 - s2[1])
-        d12 = abs(self.robot.joint_1 - s1[0]) + abs(self.robot.joint_2 - s1[1] - 2 * np.pi)
-        d22 = abs(self.robot.joint_1 - s2[0]) + abs(self.robot.joint_2 - s2[1] - 2 * np.pi)
-        d13 = abs(self.robot.joint_1 - s1[0] - 2 * np.pi) + abs(self.robot.joint_2 - s1[1] - 2 * np.pi)
-        d23 = abs(self.robot.joint_1 - s2[0] - 2 * np.pi) + abs(self.robot.joint_2 - s2[1] - 2 * np.pi)
-        d14 = abs(self.robot.joint_1 - s1[0] + 2 * np.pi) + abs(self.robot.joint_2 - s1[1])
-        d24 = abs(self.robot.joint_1 - s2[0] + 2 * np.pi) + abs(self.robot.joint_2 - s2[1])
-        d15 = abs(self.robot.joint_1 - s1[0]) + abs(self.robot.joint_2 - s1[1] + 2 * np.pi)
-        d25 = abs(self.robot.joint_1 - s2[0]) + abs(self.robot.joint_2 - s2[1] + 2 * np.pi)
-        d16 = abs(self.robot.joint_1 - s1[0] + 2 * np.pi) + abs(self.robot.joint_2 - s1[1] + 2 * np.pi)
-        d26 = abs(self.robot.joint_1 - s2[0] + 2 * np.pi) + abs(self.robot.joint_2 - s2[1] + 2 * np.pi)
-        d1 = np.min([d10, d11, d12, d13, d14, d15, d16])
-        d2 = np.min([d20, d21, d22, d23, d24, d25, d26])
+        d11 = self.find_min_distance(self.robot.joint_1, s1[0])
+        d12 = self.find_min_distance(self.robot.joint_1, s2[0])
+        d21 = self.find_min_distance(self.robot.joint_2, s1[1])
+        d22 = self.find_min_distance(self.robot.joint_2, s2[1])
+        d1 = d11 + d21
+        d2 = d12 + d22
         if d1 > d2:
             return s2, d1, d2
         else:
@@ -277,7 +282,7 @@ class Scene:
 
 
 if __name__ == "__main__":
-    occ = OccupancyGrid(random_obstacle=False)
+    occ = OccupancyGrid(random_obstacle=False, obstacle_probability=0.1)
     scene = Scene(visualize=True, env=occ)
     step = 0
     scene.random_valid_pose()
