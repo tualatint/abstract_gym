@@ -50,8 +50,10 @@ class Scene:
             self.ax.set_ylim(-robot_length * env_vis_scale, robot_length * env_vis_scale)
             self.ax.grid()
             patch_list = self.occ_to_patch()
-            circle1 = plt.Circle((0, 0), 0.1, color='r', fill=False)
+            circle1 = plt.Circle((0, 0), self.robot.link_1 - self.robot.link_2, color='r', fill=False)
+            circle2 = plt.Circle((0, 0), self.robot.total_length(), color='r', fill=False)
             self.ax.add_artist(circle1)
+            self.ax.add_artist(circle2)
             for p in patch_list:
                 self.ax.add_patch(p)
             self.robot_body_line_vis, self.ee_vis, self.target_c_vis = self.ax.plot(
@@ -97,6 +99,18 @@ class Scene:
         action = np.asmatrix(jmat.transpose() * jmat).getI() * jmat.transpose() * displacement
         return action, np.linalg.det(jmat.transpose() * jmat)
 
+    def inverse_kinematics_controller(self, goal, scale_factor=0.1):
+        s1, s2 = self.robot.inverse_kinematic(goal)
+        if s1 is None or s2 is None:
+            return
+        else:
+            # if np.random.rand() > 0.5:
+            solution = s1
+            # else:
+            #     solution = s2
+        print("inverse kinematic solution: ", solution)
+        return self.robot.move_to_joint_pose_step_action(solution[0], solution[1])
+
     def zero_action(self):
         return np.array([0.0, 0.0])
 
@@ -136,7 +150,8 @@ class Scene:
         """
         epsilon = 2e-3
         if self.choose_j_tar:
-            if abs(self.robot.joint_1 - self.target_j[0]) < epsilon and abs(self.robot.joint_2 - self.target_j[1]) < epsilon:
+            if abs(self.robot.joint_1 - self.target_j[0]) < epsilon and abs(
+                    self.robot.joint_2 - self.target_j[1]) < epsilon:
                 return True
             else:
                 return False
@@ -158,7 +173,13 @@ class Scene:
         self.robot_body_line_vis.set_xdata([0, self.robot.elbow_p.x, self.robot.EE.x])
         self.ee_vis.set_ydata([self.robot.EE.y])
         self.ee_vis.set_xdata([self.robot.EE.x])
+        self.target_c_vis.set_ydata([self.target_c.y])
+        self.target_c_vis.set_xdata([self.target_c.x])
         self.fig.canvas.draw()
+
+    def set_target_c(self, target_c):
+        self.target_c = target_c
+        self.render()
 
     def occ_to_patch(self):
         """
@@ -197,31 +218,101 @@ class Scene:
             self.robot.joint_2 = np.random.rand() * np.pi * 2.0
             condition = self.collision_check()
 
+    def move_to_joint_pose(self, target_j1, target_j2, steps=20):
+        """
+        Move to target joint pose in multiple steps.
+        :param target_j1: target joint 1 pose
+        :param target_j2: target joint 2 pose
+        :param steps: total steps to perform the motion
+        :return:
+        """
+        alpha = 1.0 / steps
+        init_j1 = self.robot.joint_1
+        init_j2 = self.robot.joint_2
+        for i in range(steps):
+            self.robot.joint_1 += alpha * (target_j1 - init_j1)
+            self.robot.joint_2 += alpha * (target_j2 - init_j2)
+            self.render()
+            if self.robot.joint_range_check():
+                print("collision reset.")
+                self.random_valid_pose()
+            if scene.check_target_reached():
+                print("succ reset.")
+                self.random_valid_pose()
+            if scene.collision_check():
+                print("collision reset.")
+                scene.random_valid_pose()
+
+    def generate_random_target_c(self):
+        condition = False
+        while not condition:
+            x = np.random.rand() * self.robot.total_length() - 0.5
+            y = np.random.rand() * self.robot.total_length() - 0.5
+            condition = self.robot.cart_target_valid_check(Point(x, y))
+        return Point(x, y)
+
+    def choose_inv_ik_with_min_j_distance(self, s1, s2):
+        if s1 is None or s2 is None:
+            return None, None, None
+        d10 = abs(self.robot.joint_1 - s1[0]) + abs(self.robot.joint_2 - s1[1])
+        d20 = abs(self.robot.joint_1 - s2[0]) + abs(self.robot.joint_2 - s2[1])
+        d11 = abs(self.robot.joint_1 - s1[0] - 2 * np.pi) + abs(self.robot.joint_2 - s1[1])
+        d21 = abs(self.robot.joint_1 - s2[0] - 2 * np.pi) + abs(self.robot.joint_2 - s2[1])
+        d12 = abs(self.robot.joint_1 - s1[0]) + abs(self.robot.joint_2 - s1[1] - 2 * np.pi)
+        d22 = abs(self.robot.joint_1 - s2[0]) + abs(self.robot.joint_2 - s2[1] - 2 * np.pi)
+        d13 = abs(self.robot.joint_1 - s1[0] - 2 * np.pi) + abs(self.robot.joint_2 - s1[1] - 2 * np.pi)
+        d23 = abs(self.robot.joint_1 - s2[0] - 2 * np.pi) + abs(self.robot.joint_2 - s2[1] - 2 * np.pi)
+        d14 = abs(self.robot.joint_1 - s1[0] + 2 * np.pi) + abs(self.robot.joint_2 - s1[1])
+        d24 = abs(self.robot.joint_1 - s2[0] + 2 * np.pi) + abs(self.robot.joint_2 - s2[1])
+        d15 = abs(self.robot.joint_1 - s1[0]) + abs(self.robot.joint_2 - s1[1] + 2 * np.pi)
+        d25 = abs(self.robot.joint_1 - s2[0]) + abs(self.robot.joint_2 - s2[1] + 2 * np.pi)
+        d16 = abs(self.robot.joint_1 - s1[0] + 2 * np.pi) + abs(self.robot.joint_2 - s1[1] + 2 * np.pi)
+        d26 = abs(self.robot.joint_1 - s2[0] + 2 * np.pi) + abs(self.robot.joint_2 - s2[1] + 2 * np.pi)
+        d1 = np.min([d10, d11, d12, d13, d14, d15, d16])
+        d2 = np.min([d20, d21, d22, d23, d24, d25, d26])
+        if d1 > d2:
+            return s2, d1, d2
+        else:
+            return s1, d1, d2
+
 
 if __name__ == "__main__":
     occ = OccupancyGrid(random_obstacle=False)
     scene = Scene(visualize=True, env=occ)
     step = 0
     scene.random_valid_pose()
+
     while True:
-        step += 1
-        action, det = scene.Jacobian_controller(goal=scene.target_c)
-        if LA.norm(action) > 1:
-            print("action :", LA.norm(action))
-            print("det :", det)
-            scene.render()
-            time.sleep(2)
-        scene.robot.move_delta(action[0], action[1])
-        if scene.collision_check():
-            print("collision reset.")
-            scene.random_valid_pose()
-            step = 0
-        if scene.check_target_reached():
-            print("succ reset.")
-            scene.random_valid_pose()
-            step = 0
-        if step > 100:
-            print("over step reset.")
-            scene.random_valid_pose()
-            step = 0
-        scene.render()
+        solution = None
+        while solution is None:
+            target_c = scene.generate_random_target_c()
+            scene.set_target_c(target_c)
+            s1, s2 = scene.robot.inverse_kinematic(scene.target_c)
+            print("s1, s2: ", s1, s2)
+            solution, d1, d2 = scene.choose_inv_ik_with_min_j_distance(s1, s2)
+            print("d1 ,d2 :", d1, d2)
+        scene.move_to_joint_pose(solution[0], solution[1])
+
+    # while True:
+    #     step += 1
+    #     #action, det = scene.Jacobian_controller(goal=scene.target_c)
+    #     action = scene.inverse_kinematics_controller(goal=scene.target_c)
+    #     if LA.norm(action) > 1:
+    #         print("action :", LA.norm(action))
+    #         #print("det :", det)
+    #         scene.render()
+    #         time.sleep(2)
+    #     scene.robot.move_delta(action[0], action[1])
+    #     if scene.collision_check():
+    #         print("collision reset.")
+    #         scene.random_valid_pose()
+    #         step = 0
+    #     if scene.check_target_reached():
+    #         print("succ reset.")
+    #         scene.random_valid_pose()
+    #         step = 0
+    #     if step > 100:
+    #         print("over step reset.")
+    #         scene.random_valid_pose()
+    #         step = 0
+    #     scene.render()

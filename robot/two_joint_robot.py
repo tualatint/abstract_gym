@@ -60,6 +60,15 @@ class TwoJointRobot:
         for i in range(steps):
             self.joint_1 += alpha * (target_j1 - init_j1)
             self.joint_2 += alpha * (target_j2 - init_j2)
+            self.joint_range_check()
+
+    def move_to_joint_pose_step_action(self, target_j1, target_j2, steps=100):
+        alpha = 1.0 / steps
+        init_j1 = self.joint_1
+        init_j2 = self.joint_2
+        action_j1 = alpha * (target_j1 - init_j1)
+        action_j2 = alpha * (target_j2 - init_j2)
+        return np.array([action_j1, action_j2])
 
     def move_delta(self, d1, d2):
         """
@@ -77,14 +86,19 @@ class TwoJointRobot:
         If the joint value is out side the range [0, 2*pi], change it back.
         :return:
         """
-        if self.joint_1 > np.pi * 2.0:
-            self.joint_1 -= np.pi * 2.0
-        if self.joint_2 > np.pi * 2.0:
-            self.joint_2 -= np.pi * 2.0
-        if self.joint_1 < 0:
-            self.joint_1 += np.pi * 2.0
-        if self.joint_2 < 0:
-            self.joint_2 += np.pi * 2.0
+        self.joint_1 = self.range_check(self.joint_1)
+        self.joint_2 = self.range_check(self.joint_2)
+
+    def range_check(self, j):
+        """
+        If the joint value is out side the range [0, 2*pi], change it back.
+        :return:
+        """
+        if j > np.pi * 2.0:
+            j -= np.pi * 2.0
+        if j < 0:
+            j += np.pi * 2.0
+        return j
 
     def cart_target_valid_check(self, target_c):
         """
@@ -113,13 +127,16 @@ class TwoJointRobot:
                 return None, None
             cos_theta = (pow(radius, 2) + pow(self.link_1, 2) - pow(self.link_2, 2)) / (2.0 * self.link_1 * radius)
             theta = np.arccos(cos_theta)
-            cos_alpha = target_c.x / radius
-            alpha = np.arccos(cos_alpha)
+            alpha = np.arctan2(target_c.y, target_c.x)
             j1_1 = alpha - theta
             j1_2 = alpha + theta
             cos_beta = (pow(self.link_1, 2) + pow(self.link_2, 2) - pow(radius, 2)) / (2.0 * self.link_1 * self.link_2)
             j2_1 = np.pi - np.arccos(cos_beta) + j1_1
             j2_2 = j1_2 - (np.pi - np.arccos(cos_beta))
+            j1_1 = self.range_check(j1_1)
+            j1_2 = self.range_check(j1_2)
+            j2_1 = self.range_check(j2_1)
+            j2_2 = self.range_check(j2_2)
             s1 = np.array([j1_1, j2_1])
             s2 = np.array([j1_2, j2_2])
             return s1, s2
