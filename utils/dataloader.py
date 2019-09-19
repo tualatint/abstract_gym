@@ -127,6 +127,8 @@ def read_file_into_sars_list(path='../data/data_list_10e6.txt'):
                         current_state_j1 = copy.deepcopy(e)
                     if index == 1:
                         current_state_j2 = copy.deepcopy(e)
+                    if index == 4 and e == 0.0:
+                        e = -1.0
                     ele.append(e)
                 if i != 0:
                     sars_element = form_sars(ele, last_state_j1, last_state_j2)

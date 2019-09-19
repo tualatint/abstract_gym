@@ -31,7 +31,7 @@ class Scene:
         self.target_c = target_c
         self.target_j = np.array([1.1, -0.2])
         self.choose_j_tar = False
-        self.step_reward = 0
+        self.step_reward = -1
         """
         collision_status: finishes one episode by colliding with obstacles.
         """
@@ -122,7 +122,7 @@ class Scene:
         """
         self.robot.move_delta(action[0], action[1])
         if self.collision_check():
-            self.step_reward = -1e3
+            self.step_reward = -1e4
             self.collision_status = True
         if self.check_target_reached():
             self.step_reward = 1e4

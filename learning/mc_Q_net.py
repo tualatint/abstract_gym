@@ -45,6 +45,28 @@ class Q_net2(torch.nn.Module):
         x = torch.relu(x)
         x = self.fc3(x)
         return x
+class Q_net3(torch.nn.Module):
+    """
+    A simple 1 hidden layer NN that maps the input of (state, action) pair to a corresponding q value.
+    """
+
+    def __init__(self):
+        super(Q_net3, self).__init__()
+        self.fc1 = torch.nn.Linear(4, 64)
+        self.fc2 = torch.nn.Linear(64, 64)
+        self.fc3 = torch.nn.Linear(64, 64)
+        self.fc4 = torch.nn.Linear(64, 1)
+        self.lock = threading.Lock()
+
+    def forward(self, x):
+        x = self.fc1(x)
+        x = torch.sigmoid(x)
+        x = self.fc2(x)
+        x = torch.sigmoid(x)
+        x = self.fc3(x)
+        x = torch.sigmoid(x)
+        x = self.fc4(x)
+        return x
 
 def choose_action(q_net, state, action_list):
     """

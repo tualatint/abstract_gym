@@ -114,8 +114,7 @@ class RingOfflineData:
             try:
                 self.lock.acquire()
                 for l in self.new_data_to_be_appended:
-                    for d in l:
-                        f.write("%s\n" % d)
+                    f.write("%s\n" % l)
                 self.new_data_to_be_appended.clear()
             finally:
                 self.lock.release()
