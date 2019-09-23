@@ -37,6 +37,15 @@ class TwoJointRobot:
         EE_y = np.sin(self.joint_1) * self.link_1 + np.sin(self.joint_2) * self.link_2
         return Point(EE_x, EE_y)
 
+    def virtual_end_effector(self, j1, j2):
+        """
+        Calculate end effector position using forward kinematics.
+        :return: EE point
+        """
+        EE_x = np.cos(j1) * self.link_1 + np.cos(j2) * self.link_2
+        EE_y = np.sin(j1) * self.link_1 + np.sin(j2) * self.link_2
+        return Point(EE_x, EE_y)
+
     def elbow_point(self):
         """
         Calculate the elbow point using forward kinematics
@@ -44,6 +53,15 @@ class TwoJointRobot:
         """
         elbow_x = np.cos(self.joint_1) * self.link_1
         elbow_y = np.sin(self.joint_1) * self.link_1
+        return Point(elbow_x, elbow_y)
+
+    def virtual_elbow_point(self, j1):
+        """
+        Calculate the elbow point of a given joint 1 value using forward kinematics
+        :return: elbow point
+        """
+        elbow_x = np.cos(j1) * self.link_1
+        elbow_y = np.sin(j1) * self.link_1
         return Point(elbow_x, elbow_y)
 
     def move_to_joint_pose(self, target_j1, target_j2, steps=100):
@@ -141,7 +159,7 @@ class TwoJointRobot:
             s2 = np.array([j1_2, j2_2])
             return s1, s2
         else:
-            print("Target out of reach.")
+            #print("Target out of reach.")
             return None, None
 
     def Jacobian_matrix(self):

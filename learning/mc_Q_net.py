@@ -68,6 +68,30 @@ class Q_net3(torch.nn.Module):
         x = self.fc4(x)
         return x
 
+class Q_net10(torch.nn.Module):
+    """
+    A simple 1 hidden layer NN that maps the input of (state, action) pair to a corresponding q value.
+    state = j1, j2, target_cx, target_cy
+    """
+
+    def __init__(self):
+        super(Q_net10, self).__init__()
+        self.fc1 = torch.nn.Linear(6, 64)
+        self.fc2 = torch.nn.Linear(64, 64)
+        self.fc3 = torch.nn.Linear(64, 64)
+        self.fc4 = torch.nn.Linear(64, 1)
+        self.lock = threading.Lock()
+
+    def forward(self, x):
+        x = self.fc1(x)
+        x = torch.relu(x)
+        x = self.fc2(x)
+        x = torch.relu(x)
+        x = self.fc3(x)
+        x = torch.relu(x)
+        x = self.fc4(x)
+        return x
+
 def choose_action(q_net, state, action_list):
     """
     Using q_net to evaluate a list of sampled action in a given state, and choose the action with highest q value.

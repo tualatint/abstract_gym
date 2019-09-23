@@ -43,7 +43,7 @@ class Sampler(data.Dataset):
         Calculate the expected future reward
         :param l: the steps between sampled step and end.
 
-        :param end_reward: the end reward, either -1e3 (collision) or 1e4 (success)
+        :param end_reward: the end reward, either -1e4 (collision) or 1e4 (success)
         :return:
         """
         return end_reward * pow(self.gamma, l)
@@ -99,11 +99,13 @@ class OfflineData(data.Dataset):
         sars = np.concatenate((record[seed][0:5], next_state), axis=0)
         return sars
 
-def form_sars(ele, last_state_j1, last_state_j2):
-    return last_state_j1, last_state_j2, ele[2], ele[3], ele[4], ele[0], ele[1]
+def form_sars(ele, last_state_j1, last_state_j2, stage=0):
+    if stage == 0:
+        return last_state_j1, last_state_j2, ele[2], ele[3], ele[4], ele[0], ele[1]
+    if stage == 1:
+        return last_state_j1, last_state_j2, ele[5], ele[6], ele[2], ele[3], ele[4], ele[0], ele[1]
 
-
-def read_file_into_sars_list(path='../data/data_list_10e6.txt'):
+def read_file_into_sars_list(path='../data/data_list_10e6.txt', stage=0):
     start = time.time()
     total_data_point_num = np.int64(0)
     with open(path, 'r') as f:
@@ -122,7 +124,10 @@ def read_file_into_sars_list(path='../data/data_list_10e6.txt'):
                 sars = []
                 for index, e in enumerate(elements):
                     e = e.strip(" ()")
-                    e = float(e)
+                    try:
+                        e = float(e)
+                    except:
+                        print("e:",e)
                     if index == 0:
                         current_state_j1 = copy.deepcopy(e)
                     if index == 1:
@@ -131,7 +136,7 @@ def read_file_into_sars_list(path='../data/data_list_10e6.txt'):
                         e = -1.0
                     ele.append(e)
                 if i != 0:
-                    sars_element = form_sars(ele, last_state_j1, last_state_j2)
+                    sars_element = form_sars(ele, last_state_j1, last_state_j2, stage)
                     sars.append(sars_element)
                 last_state_j1 = current_state_j1
                 last_state_j2 = current_state_j2

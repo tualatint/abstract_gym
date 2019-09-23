@@ -15,13 +15,24 @@ class BellmanUpdater:
     Update the Q target according to bellman equation:
     Q_t(s,a) = r + max_a' Q_w(s',a')
     """
-    def __init__(self, q_net, sars):
+    def __init__(self, q_net, sars, stage=0):
         self.q_net = q_net
         self.batch_size = sars.shape[0]
         self.sars = torch.Tensor(sars).to(dtype=torch.float)
-        self.s1a1 = self.sars[:, 0:4]
-        self.s2 = self.sars[:, 5:7]
-        self.r1 = self.sars[:, 4]
+        self.stage = stage
+        if self.stage == 0:
+            self.s1a1 = self.sars[:, 0:4]  # s = j1, j2
+            self.s2 = self.sars[:, 5:7]
+            self.r1 = self.sars[:, 4]
+            self.state_vec_length = 2
+        else:
+            if self.stage == 1:  # s1 t a r s2 = j11, j21, tx, ty, a1, a2, r, j12, j22
+                self.s1a1 = self.sars[:, 0:6]  # s = j1, j2, tx, ty
+                self.s2 = torch.cat((self.sars[:, 7:9], self.sars[:, 2:4]), 1)
+                self.r1 = self.sars[:, 6]
+                self.state_vec_length = 4
+            else:
+                print("Unspecified stage.")
 
     def calculate_qt(self):
         max_q_value = self.sample_max_q_value()
@@ -34,7 +45,7 @@ class BellmanUpdater:
         x = torch.repeat_interleave(self.s2, sample_size)
         x = x.reshape(self.batch_size, -1, sample_size)
         x = torch.transpose(x, 2, 1)
-        state_list = x.reshape(-1, 2).to(dtype=torch.float)
+        state_list = x.reshape(-1, self.state_vec_length).to(dtype=torch.float)
         input_x = torch.cat((state_list, action_list), 1)
         input_x = input_x.to(device, dtype=torch.float)
         try:
@@ -53,13 +64,14 @@ class BellmanUpdater:
 
 class RingOfflineData:
 
-    def __init__(self, data_file_path, capacity=np.int64(1e7)):
+    def __init__(self, data_file_path, capacity=np.int64(1e7), stage=0):
         self.capacity = capacity
         if data_file_path is None:
             self.memory = []
+            self.position = np.int64(0)
         else:
-            self.memory = read_file_into_sars_list(data_file_path)
-        self.position = np.int64(0)
+            self.memory = read_file_into_sars_list(data_file_path, stage)
+            self.position = np.int64(len(self.memory))
         self.data_file_path = data_file_path
         self.new_data_to_be_appended = []
         self.lock = threading.Lock()
@@ -158,14 +170,14 @@ class EpsilonGreedyPolicyFunction:
         self.state = state
         self.scale_factor = scale_factor
 
-    def choose_action(self):
+    def choose_action(self, sample_size=10):
         if np.random.rand() < self.epsilon:
             action = ((np.random.rand(1, 2) - 0.5) * self.scale_factor).squeeze()
         else:
-            action = self.sample_best_action()
+            action = self.sample_best_action(sample_size=sample_size)
         return action
 
-    def sample_best_action(self, sample_size=500):
+    def sample_best_action(self, sample_size=10):
         action_list = (np.random.rand(sample_size, 2) - 0.5) * self.scale_factor
         state_list = np.tile(self.state, (sample_size, 1))
         input_x = torch.cat((torch.Tensor(state_list), torch.Tensor(action_list)), 1)
@@ -181,7 +193,12 @@ class EpsilonGreedyPolicyFunction:
 
 
 if __name__ =="__main__":
-    pass
+    # pass
+    a = torch.ones(5, 2)
+    b = 2 * torch.ones(5, 2)
+    c = torch.cat((a, b), 1)
+    print("b", b.shape)
+    print("c", c)
     # a = np.random.rand(np.int64(1e7), 2)
     # a = a.tolist()
     # b = random.sample(a, 1)

@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 from matplotlib.path import Path
 import matplotlib.patches as patches
 from numpy import linalg as LA
+import random
 import time
 
 import __init__
@@ -30,8 +31,10 @@ class Scene:
         self.vis = visualize
         self.target_c = target_c
         self.target_j = np.array([1.1, -0.2])
+        self.ik_solution = None
         self.choose_j_tar = False
-        self.step_reward = -1
+        self.init_step_reward = -1
+        self.step_reward = self.init_step_reward
         """
         collision_status: finishes one episode by colliding with obstacles.
         """
@@ -56,12 +59,16 @@ class Scene:
             self.ax.add_artist(circle2)
             for p in patch_list:
                 self.ax.add_patch(p)
-            self.robot_body_line_vis, self.ee_vis, self.target_c_vis = self.ax.plot(
+            self.robot_body_line_vis, self.ee_vis, self.target_c_vis, self.virtual_robot_body_line_vis = self.ax.plot(
                 [0, self.robot.elbow_p.x, self.robot.EE.x],
                 [0, self.robot.elbow_p.y, self.robot.EE.y],
                 'o-',
                 [self.robot.EE.x], [self.robot.EE.y], 'ro',
-                [self.target_c.x], [self.target_c.y], 'go')
+                [self.target_c.x], [self.target_c.y], 'go',
+                [0, self.robot.virtual_elbow_point(0).x, self.robot.virtual_end_effector(0, 0).x],
+                [0, self.robot.virtual_elbow_point(0).y, self.robot.virtual_end_effector(0, 0).y],
+                '--',
+            )
 
     def collision_check(self):
         """
@@ -92,6 +99,12 @@ class Scene:
         return np.array([d1, d2])
 
     def Jacobian_controller(self, goal, scale_factor=0.1):
+        """
+        A naive implement of jacobian based controller, suffers from singularities.
+        :param goal:
+        :param scale_factor:
+        :return:
+        """
         jmat = self.robot.Jacobian_matrix()
         EE = self.robot.end_effector()
         displacement = scale_factor * np.array([goal.x - EE.x, goal.y - EE.y])
@@ -99,17 +112,61 @@ class Scene:
         action = np.asmatrix(jmat.transpose() * jmat).getI() * jmat.transpose() * displacement
         return action, np.linalg.det(jmat.transpose() * jmat)
 
-    def inverse_kinematics_controller(self, goal, scale_factor=0.1):
-        s1, s2 = self.robot.inverse_kinematic(goal)
+    def choose_collision_free_ik_solution(self, target_cartesian):
+        """
+        Find the collsion free ik solution for a given cartesian target, if both ik solutions are collision free, choose
+        the one with minimum joint distance.
+        :param target_cartesian:
+        :return:
+        """
+        s1, s2 = self.robot.inverse_kinematic(target_cartesian)
         if s1 is None or s2 is None:
-            return
+            return None
         else:
-            # if np.random.rand() > 0.5:
-            solution = s1
-            # else:
-            #     solution = s2
-        print("inverse kinematic solution: ", solution)
-        return self.robot.move_to_joint_pose_step_action(solution[0], solution[1])
+            collision_free_solution_list = []
+            if not self.ik_solution_collision_check(s1):
+                collision_free_solution_list.append(s1)
+            if not self.ik_solution_collision_check(s2):
+                collision_free_solution_list.append(s2)
+            if len(collision_free_solution_list) == 0:
+                print("Both ik solutions are in collision.")
+                return None
+            else:
+                if len(collision_free_solution_list) == 1:
+                    self.ik_solution = collision_free_solution_list[0]
+                    return self.ik_solution
+                else:
+                    s, _, _ = self.choose_ik_with_min_j_distance(s1, s2)
+                    self.ik_solution = s
+                    return self.ik_solution
+
+    def joint_speed_limit(self, action, limit=0.05):
+        if action > limit:
+            action = limit
+        if action < -limit:
+            action = -limit
+        return action
+
+    def inverse_kinematics_controller(self):
+        """
+        Generate a step action for a given ik solution.
+        The action is scaled to have a norm of 0.0707
+        :return:
+        """
+        action_norm_scale = 0.0708
+        joint_speed_limit = 0.05
+        action_j1 = self.ik_solution[0] - self.robot.joint_1
+        action_j2 = self.ik_solution[1] - self.robot.joint_2
+        if abs(action_j1) > np.pi:
+            action_j1 *= -1.0
+        if abs(action_j2) > np.pi:
+            action_j2 *= -1.0
+        action_j1 = self.joint_speed_limit(action_j1, joint_speed_limit)
+        action_j2 = self.joint_speed_limit(action_j2, joint_speed_limit)
+        action = np.array([action_j1, action_j2])
+        if np.linalg.norm(action) > action_norm_scale:
+            action = action_norm_scale * action/np.linalg.norm(action)
+        return action
 
     def zero_action(self):
         return np.array([0.0, 0.0])
@@ -139,7 +196,8 @@ class Scene:
         self.random_valid_pose()
         self.collision_status = False
         self.done = False
-        self.step_reward = 0
+        self.step_reward = self.init_step_reward
+
 
     def check_target_reached(self):
         """
@@ -175,11 +233,53 @@ class Scene:
         self.ee_vis.set_xdata([self.robot.EE.x])
         self.target_c_vis.set_ydata([self.target_c.y])
         self.target_c_vis.set_xdata([self.target_c.x])
+        if self.ik_solution is not None:
+            self.virtual_robot_body_line_vis.set_ydata([0, self.robot.virtual_elbow_point(self.ik_solution[0]).y, self.robot.virtual_end_effector(self.ik_solution[0],self.ik_solution[1]).y])
+            self.virtual_robot_body_line_vis.set_xdata([0, self.robot.virtual_elbow_point(self.ik_solution[0]).x, self.robot.virtual_end_effector(self.ik_solution[0],self.ik_solution[1]).x])
         self.fig.canvas.draw()
 
     def set_target_c(self, target_c):
+        """
+        Set the cartesian target of the scene.
+        :param target_c: a point
+        :return:
+        """
         self.target_c = target_c
-        self.render()
+        if self.vis:
+            self.render()
+
+    def set_random_target_c(self):
+        """
+        Set a randomly generated reachable cartesian target, which is at least collision free for one ik solution.
+        :return:
+        """
+        while True:
+            target_c = self.generate_random_target_c()
+            s1, s2 = self.robot.inverse_kinematic(target_c)
+            if s1 is None or s2 is None:
+                continue
+            if self.ik_solution_collision_check(s1) and self.ik_solution_collision_check(s2):
+                continue
+            self.set_target_c(target_c=target_c)
+            return target_c
+
+    def ik_solution_collision_check(self, solution):
+        """
+        Check whether in the ik solution pose the robot is in collision with the obstacles.
+        :return: Bool, if it is in collision
+        """
+        l1 = Line(Point(0, 0), self.robot.virtual_elbow_point(solution[0]))
+        l2 = Line(self.robot.virtual_elbow_point(solution[0]), self.robot.virtual_end_effector(solution[0], solution[1]))
+        for index, ob in enumerate(self.obstacle_list):
+            l1c = CollisionChecker(l1, ob)
+            c_1 = l1c.collision_check()
+            if c_1:
+                return True
+            l2c = CollisionChecker(l2, ob)
+            c_2 = l2c.collision_check()
+            if c_2:
+                return True
+        return False
 
     def occ_to_patch(self):
         """
@@ -244,10 +344,14 @@ class Scene:
         self.robot.joint_range_check()
 
     def generate_random_target_c(self):
+        """
+        Generate a random reachable cartesian target.
+        :return: a cartesian target represented as a point.
+        """
         condition = False
         while not condition:
-            x = np.random.rand() * self.robot.total_length() - 0.5
-            y = np.random.rand() * self.robot.total_length() - 0.5
+            x = 2 * np.random.rand() * self.robot.total_length() - self.robot.total_length()
+            y = 2 * np.random.rand() * self.robot.total_length() - self.robot.total_length()
             condition = self.robot.cart_target_valid_check(Point(x, y))
         return Point(x, y)
 
@@ -261,12 +365,11 @@ class Scene:
 
     def find_min_distance(self, v1, v2):
         d0 = abs(v1 - v2)
-        d1 = abs(v1 - v2 + 2 * np.pi)
-        d2 = abs(v1 - v2 - 2 * np.pi)
-        d = np.min([d0, d1, d2])
+        d1 = 2 * np.pi - d0
+        d = np.min([d0, d1])
         return d
 
-    def choose_inv_ik_with_min_j_distance(self, s1, s2):
+    def choose_ik_with_min_j_distance(self, s1, s2):
         if s1 is None or s2 is None:
             return None, None, None
         d11 = self.find_min_distance(self.robot.joint_1, s1[0])
@@ -282,42 +385,49 @@ class Scene:
 
 
 if __name__ == "__main__":
-    occ = OccupancyGrid(random_obstacle=False, obstacle_probability=0.1)
+    occ = OccupancyGrid(random_obstacle=False, obstacle_probability=0.03)
     scene = Scene(visualize=True, env=occ)
     step = 0
     scene.random_valid_pose()
 
-    while True:
-        solution = None
-        while solution is None:
-            target_c = scene.generate_random_target_c()
-            scene.set_target_c(target_c)
-            s1, s2 = scene.robot.inverse_kinematic(scene.target_c)
-            print("s1, s2: ", s1, s2)
-            solution, d1, d2 = scene.choose_inv_ik_with_min_j_distance(s1, s2)
-            print("d1 ,d2 :", d1, d2)
-        scene.move_to_joint_pose(solution[0], solution[1])
-
     # while True:
-    #     step += 1
-    #     #action, det = scene.Jacobian_controller(goal=scene.target_c)
-    #     action = scene.inverse_kinematics_controller(goal=scene.target_c)
-    #     if LA.norm(action) > 1:
-    #         print("action :", LA.norm(action))
-    #         #print("det :", det)
-    #         scene.render()
-    #         time.sleep(2)
-    #     scene.robot.move_delta(action[0], action[1])
-    #     if scene.collision_check():
-    #         print("collision reset.")
-    #         scene.random_valid_pose()
-    #         step = 0
-    #     if scene.check_target_reached():
-    #         print("succ reset.")
-    #         scene.random_valid_pose()
-    #         step = 0
-    #     if step > 100:
-    #         print("over step reset.")
-    #         scene.random_valid_pose()
-    #         step = 0
-    #     scene.render()
+    #     solution = None
+    #     while solution is None:
+    #         target_c = scene.set_random_target_c()
+    #         #target_c = scene.generate_random_target_c()
+    #         #scene.set_target_c(target_c)
+    #         s1, s2 = scene.robot.inverse_kinematic(scene.target_c)
+    #
+    #         print("s1, s2: ", s1, s2)
+    #         solution, d1, d2 = scene.choose_ik_with_min_j_distance(s1, s2)
+    #         print("d1 ,d2 :", d1, d2)
+    #     scene.move_to_joint_pose(solution[0], solution[1])
+
+    target_c = scene.set_random_target_c()
+    while True:
+        step += 1
+        if step == 1:
+            scene.choose_collision_free_ik_solution(target_c)
+        action = scene.inverse_kinematics_controller()
+        if LA.norm(action) > 1:
+            print("action :", LA.norm(action))
+            #print("det :", det)
+            scene.render()
+            time.sleep(2)
+        scene.robot.move_delta(action[0], action[1])
+        if scene.collision_check():
+            print("collision reset.")
+            scene.random_valid_pose()
+            target_c = scene.set_random_target_c()
+            step = 0
+        if scene.check_target_reached():
+            print("succ reset.")
+            scene.random_valid_pose()
+            target_c = scene.set_random_target_c()
+            step = 0
+        if step > 100:
+            print("over step reset.")
+            scene.random_valid_pose()
+            target_c = scene.set_random_target_c()
+            step = 0
+        scene.render()
