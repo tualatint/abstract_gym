@@ -22,7 +22,6 @@ def labeler_thread_function(q_net, offline_data_ring_buffer, ring_buffer):
     """
     print("Starting labeler thread...")
     batch_size = 1000
-
     while True:
         sars = offline_data_ring_buffer.sample(batch_size=batch_size)
         if len(sars) == 0:

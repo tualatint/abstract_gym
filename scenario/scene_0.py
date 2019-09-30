@@ -384,6 +384,7 @@ class Scene:
             return s1, d1, d2
 
 
+
 if __name__ == "__main__":
     occ = OccupancyGrid(random_obstacle=False, obstacle_probability=0.03)
     scene = Scene(visualize=True, env=occ)

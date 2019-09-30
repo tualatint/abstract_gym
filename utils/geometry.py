@@ -1,8 +1,21 @@
+import math
+
+
 class Point:
 
     def __init__(self, x, y):
         self.x = x
         self.y = y
+
+
+def euclidean_distance(p0, p1):
+    d = math.sqrt(pow((p0.x - p1.x), 2) + pow((p0.y - p1.y), 2))
+    return d
+
+
+def euclidean_distance_square(p0, p1):
+    d = pow((p0.x - p1.x), 2) + pow((p0.y - p1.y), 2)
+    return d
 
 
 class Line:
@@ -31,6 +44,11 @@ class Line:
         c = self.p0.y / (self.p1.y - self.p0.y) - self.p0.x / (self.p1.x - self.p0.x)
         return a, b, c
 
+    def divide_into_point_set(self, resolution):
+        if resolution <= 2:
+            return [self.p0, self.p1]
+        
+
 
 class Square:
 
@@ -44,3 +62,4 @@ class Square:
         self.min_y = pbl.y
         self.max_x = pur.x
         self.max_y = pur.y
+        self.center = Point((self.min_x + self.max_x) / 2.0, (self.min_y + self.max_y) / 2.0)
