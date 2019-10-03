@@ -14,12 +14,16 @@ class RepulsiveForce:
         self.s = square
         self.obstacle_center = self.s.center
         self.force_coeff = 1.0
+        self.resolution = resolution
         self.list_of_line_points = self.l.divide_into_point_set(resolution)
 
 
-
     def obstacle_repulsive_force(self):
-        r2_0 = euclidean_distance_square(self.obstacle_center, self.l.p0)
-        r2_1 = euclidean_distance_square(self.obstacle_center, self.l.p1)
-        f_0 = self.force_coeff * 1.0 / r2_0
-        f_1 = self.force_coeff * 1.0 / r2_1
+        force_list = []
+        for p in self.list_of_line_points:
+            r = euclidean_distance_square(self.obstacle_center, p)
+            f = self.force_coeff * 1.0 / r * np.array((p.x - self.obstacle_center.x), (p.y - self.obstacle_center.y))
+            force_list.append(f)
+        force_list = np.array(force_list)
+        normalized_total_force = force_list.sum(axis=1) / self.resolution
+        return force_list, normalized_total_force
