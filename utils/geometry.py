@@ -1,4 +1,5 @@
 import math
+import numpy as np
 
 
 class Point:
@@ -24,6 +25,9 @@ class Line:
         self.p0 = p0
         self.p1 = p1
 
+    def length(self):
+        vec = np.array([(self.p1.x - self.p0.x), (self.p1.y - self.p0.y)])
+        return np.linalg.norm(vec)
 
     def compute_line_function(self):
         """
@@ -62,6 +66,24 @@ class Line:
             point_set.append(p)
         return point_set
 
+    def normalized_line_vec(self):
+        """
+        Normalized vector pointing towards p1.
+        :return:
+        """
+        vec = np.array([(self.p1.x - self.p0.x), (self.p1.y - self.p0.y)])
+        vec = vec / np.linalg.norm(vec)
+        return vec
+
+
+    def normalized_perpendicular_vec(self):
+        """
+        Normalized vector perpendicular to the line
+        :return:
+        """
+        vec = np.array([(self.p1.y - self.p0.y), -(self.p1.x - self.p0.x)])
+        vec = vec / np.linalg.norm(vec)
+        return vec
         
 
 

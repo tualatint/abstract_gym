@@ -1,4 +1,5 @@
 import numpy as np
+import copy
 
 import __init__
 from abstract_gym.utils.geometry import Point
@@ -20,6 +21,8 @@ class TwoJointRobot:
         """
         self.joint_1 = joint_1
         self.joint_2 = joint_2
+        self.j1_speed = 0
+        self.j2_speed = 0
         self.link_1 = link_1
         self.link_2 = link_2
         self.EE = self.end_effector()
@@ -99,6 +102,21 @@ class TwoJointRobot:
         self.joint_2 += d2
         self.joint_range_check()
 
+    def acceleration_control_step(self, acc, k=0.02):
+        """
+        Control the joint movement according to acceleration.
+        :param acc:
+        :param k: damping
+        :return:
+        """
+        j1_speed = copy.deepcopy(self.j1_speed)
+        j2_speed = copy.deepcopy(self.j2_speed)
+        self.joint_1 += j1_speed
+        self.joint_2 += j2_speed
+        self.j1_speed = acc[0] + j1_speed * (1.0 - k)
+        self.j2_speed = acc[1] + j2_speed * (1.0 - k)
+        self.joint_range_check()
+
     def joint_range_check(self):
         """
         If the joint value is out side the range [0, 2*pi], change it back.
@@ -159,13 +177,12 @@ class TwoJointRobot:
             s2 = np.array([j1_2, j2_2])
             return s1, s2
         else:
-            #print("Target out of reach.")
+            # print("Target out of reach.")
             return None, None
 
     def Jacobian_matrix(self):
         return np.array([np.squeeze([-self.link_1 * np.sin(self.joint_1), -self.link_2 * np.sin(self.joint_2)]),
                          np.squeeze([self.link_1 * np.cos(self.joint_1), self.link_2 * np.cos(self.joint_2)])])
-
 
 
 if __name__ == "__main__":
@@ -178,6 +195,6 @@ if __name__ == "__main__":
     print("A mat :", A)
     print("B mat :", B)
     print("inverse J :", np.asmatrix(J_mat).getI())
-    #s1, s2 = robot.inverse_kinematic(tar)
-    #print("s1 :", s1)
-    #print("s2 :", s2)
+    # s1, s2 = robot.inverse_kinematic(tar)
+    # print("s1 :", s1)
+    # print("s2 :", s2)
