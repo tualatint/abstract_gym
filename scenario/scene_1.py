@@ -167,7 +167,7 @@ class Scene:
         action_j2 = self.joint_speed_limit(action_j2, joint_speed_limit)
         action = np.array([action_j1, action_j2])
         if np.linalg.norm(action) > action_norm_scale:
-            action = action_norm_scale * action/np.linalg.norm(action)
+            action = action_norm_scale * action / np.linalg.norm(action)
         return action
 
     def zero_action(self):
@@ -199,7 +199,6 @@ class Scene:
         self.collision_status = False
         self.done = False
         self.step_reward = self.init_step_reward
-
 
     def check_target_reached(self):
         """
@@ -236,8 +235,12 @@ class Scene:
         self.target_c_vis.set_ydata([self.target_c.y])
         self.target_c_vis.set_xdata([self.target_c.x])
         if self.ik_solution is not None:
-            self.virtual_robot_body_line_vis.set_ydata([0, self.robot.virtual_elbow_point(self.ik_solution[0]).y, self.robot.virtual_end_effector(self.ik_solution[0],self.ik_solution[1]).y])
-            self.virtual_robot_body_line_vis.set_xdata([0, self.robot.virtual_elbow_point(self.ik_solution[0]).x, self.robot.virtual_end_effector(self.ik_solution[0],self.ik_solution[1]).x])
+            self.virtual_robot_body_line_vis.set_ydata([0, self.robot.virtual_elbow_point(self.ik_solution[0]).y,
+                                                        self.robot.virtual_end_effector(self.ik_solution[0],
+                                                                                        self.ik_solution[1]).y])
+            self.virtual_robot_body_line_vis.set_xdata([0, self.robot.virtual_elbow_point(self.ik_solution[0]).x,
+                                                        self.robot.virtual_end_effector(self.ik_solution[0],
+                                                                                        self.ik_solution[1]).x])
         self.fig.canvas.draw()
 
     def set_target_c(self, target_c):
@@ -271,7 +274,8 @@ class Scene:
         :return: Bool, if it is in collision
         """
         l1 = Line(Point(0, 0), self.robot.virtual_elbow_point(solution[0]))
-        l2 = Line(self.robot.virtual_elbow_point(solution[0]), self.robot.virtual_end_effector(solution[0], solution[1]))
+        l2 = Line(self.robot.virtual_elbow_point(solution[0]),
+                  self.robot.virtual_end_effector(solution[0], solution[1]))
         for index, ob in enumerate(self.obstacle_list):
             l1c = CollisionChecker(l1, ob)
             c_1 = l1c.collision_check()
@@ -358,6 +362,12 @@ class Scene:
         return Point(x, y)
 
     def find_nearest_target(self, v1, v2):
+        """
+        Find the nearest target in the range of -2pi ~ 4pi
+        :param v1:
+        :param v2:
+        :return:
+        """
         d0 = abs(v1 - v2)
         d1 = abs(v1 - v2 + 2 * np.pi)
         d2 = abs(v1 - v2 - 2 * np.pi)
@@ -385,13 +395,24 @@ class Scene:
         else:
             return s1, d1, d2
 
-    def total_external_repulsive_force_on_link(self, l):
+    def total_external_repulsive_force_on_link(self, l, only_max=False):
         pf_list = []
         tf_list = []
+        max_pf = np.zeros(2)
+        max_tf = np.zeros(2)
         for ob in self.obstacle_list:
             rf = RepulsiveForce(l, ob, resolution=5)
             fl, total_f, pf, tf = rf.obstacle_repulsive_force()
             pf_list.append(pf)
+            tf_list.append(tf)
+            if np.linalg.norm(max_pf) < np.linalg.norm(pf):
+                max_pf = pf
+            if np.linalg.norm(max_tf) < np.linalg.norm(tf):
+                max_tf = tf
+        if only_max:
+            total_pf = max_pf
+            total_tf = max_tf
+            return total_pf, total_tf
         pf_list = np.array(pf_list)
         tf_list = np.array(tf_list)
         total_pf = pf_list.sum(axis=0)
@@ -401,8 +422,8 @@ class Scene:
     def repulsive_acceleration(self):
         l1 = Line(Point(0, 0), self.robot.elbow_point())
         l2 = Line(self.robot.elbow_point(), self.robot.end_effector())
-        pf1, tf1 = self.total_external_repulsive_force_on_link(l1)
-        pf2, tf2 = self.total_external_repulsive_force_on_link(l2)
+        pf1, tf1 = self.total_external_repulsive_force_on_link(l1, only_max=False)
+        pf2, tf2 = self.total_external_repulsive_force_on_link(l2, only_max=True)
         """
         torque_2 is the external torque that acts on link2
         """
@@ -412,78 +433,95 @@ class Scene:
             direct_1 = 0
         if isinstance(pf2, float):
             direct_2 = 0
-        torque_2 = - direct_2 * (np.linalg.norm(pf2) * (0.5 * l2.length()) - direct_1 * np.linalg.norm(pf1) * 0.1)
-        torque_1 = - direct_1 * (np.linalg.norm(pf1) * 0.5 * l1.length()) #+ np.dot(tf2, l1.normalized_perpendicular_vec()) * l1.length())
+        torque_2 = - direct_2 * (np.linalg.norm(pf2) * (0.5 * l2.length())) #- direct_1 * np.linalg.norm(pf1) * 0.1)
+        torque_1 = - direct_1 * (np.linalg.norm(
+            pf1) * 0.5 * l1.length())  # + np.dot(tf2, l1.normalized_perpendicular_vec()) * l1.length())
         acc = np.array([torque_1, torque_2])
         return acc
 
-    def updateOcc(self, occ):
-        for p in self.patches:
-            p.remove()
+    def joint_target_acceleration(self, target_j1, target_j2):
+        init_j1 = self.robot.joint_1
+        init_j2 = self.robot.joint_2
+        target_j1 = self.find_nearest_target(init_j1, target_j1)
+        target_j2 = self.find_nearest_target(init_j2, target_j2)
+        gain = 0.03
+        acc_1 = gain * (target_j1 - init_j1)
+        acc_2 = gain * (target_j2 - init_j2)
+        target_distance = abs(target_j1 - init_j1) + abs(target_j1 - init_j1)
+        acc = np.array([acc_1, acc_2])
+        return acc, target_distance
+
+    def updateOcc(self, occ, vis):
         self.occ_matrix, self.occ_coord, self.obstacle_list, self.obstacle_side_length = occ.get_occupancy_grid()
-        patch_list = self.occ_to_patch()
-        self.patches.clear()
-        for p in patch_list:
-            self.patches.append(self.ax.add_patch(p))
-        self.fig.canvas.draw()
+        if vis:
+            for p in self.patches:
+                p.remove()
+            patch_list = self.occ_to_patch()
+            self.patches.clear()
+            for p in patch_list:
+                self.patches.append(self.ax.add_patch(p))
+            self.fig.canvas.draw()
+
+    def current_joint_speed(self):
+        return abs(self.robot.j1_speed) + abs(self.robot.j2_speed)
 
 if __name__ == "__main__":
-    occ = OccupancyGrid(random_obstacle=True, obstacle_probability=0.03)
-    scene = Scene(visualize=True, env=occ)
+    obs_rate = 0.03
+    damping_ratio = np.sqrt(2.0)/2.0
+    random_obstacle = True
+    vis = True
+    occ = OccupancyGrid(random_obstacle=random_obstacle, obstacle_probability=obs_rate)
+    scene = Scene(visualize=vis, env=occ)
     step = 0
+    succ = 0
+    trial = 0
     scene.random_valid_pose()
-    scale_factor = 0.05
+    repulsive_scale_factor = 0.005
+    scale_factor = 0.8
+    solution = None
+    verbose = False
+    reset_flag = False
     while True:
         step += 1
-        acc = scene.repulsive_acceleration() * scale_factor
-        print("acc", acc)
-        scene.robot.acceleration_control_step(acc, k=0.15)
-        scene.render()
-        if step > 100:
-            print("over step reset.")
-            occ = OccupancyGrid(random_obstacle=True, obstacle_probability=0.03)
-            scene.updateOcc(occ)
+        while solution is None:
+            target_c = scene.set_random_target_c()
+            solution = scene.choose_collision_free_ik_solution(target_c)
+        target_acc, target_distance = scene.joint_target_acceleration(solution[0], solution[1])
+        repulsive_acc = scene.repulsive_acceleration() * repulsive_scale_factor * np.exp(-1.0 * 1.5/target_distance)
+        current_speed = scene.current_joint_speed()
+        random_acc = (np.random.rand(2)-0.5) * 0.3 * (step / 20) * np.exp(-10.0 * current_speed) * np.exp(-1.0 * 0.03 / np.linalg.norm(target_acc))
+        total_acc = repulsive_acc + target_acc + random_acc
+        scene.robot.acceleration_control_step(total_acc * scale_factor, damping=damping_ratio, joint_speed_limit=0.06)
+        #scene.robot.acceleration_control_step(target_acc, damping=damping_ratio, joint_speed_limit=0.05)
+        if vis:
+            scene.render()
+        if scene.collision_check():
+            if verbose:
+                print("collision reset.")
+                print("repulsive_acc {:.4f}".format(np.linalg.norm(repulsive_acc)))
+                print("target_acc {:.4f}".format(np.linalg.norm(target_acc)))
+                print("random_acc {:.4f}".format(np.linalg.norm(random_acc)))
+            reset_flag = True
+        if scene.check_target_reached():
+            succ += 1
+            if verbose:
+                print("succ reset.")
+            reset_flag = True
+        if step > 500:
+            if verbose:
+                print("over step reset.")
+                print("repulsive_acc {:.4f}".format(np.linalg.norm(repulsive_acc)))
+                print("target_acc {:.4f}".format(np.linalg.norm(target_acc)))
+                print("random_acc {:.4f}".format(np.linalg.norm(random_acc)))
+            reset_flag = True
+        if reset_flag:
+            trial += 1
+            occ = OccupancyGrid(random_obstacle=random_obstacle, obstacle_probability=obs_rate)
+            scene.updateOcc(occ, vis=vis)
             scene.random_valid_pose()
+            solution = None
             step = 0
+            reset_flag = False
+        if trial % 100 == 0 and step == 0:
+                print("succ rate: {:.4f} in {} trials.".format(succ / trial, trial))
 
-    # while True:
-    #     solution = None
-    #     while solution is None:
-    #         target_c = scene.set_random_target_c()
-    #         #target_c = scene.generate_random_target_c()
-    #         #scene.set_target_c(target_c)
-    #         s1, s2 = scene.robot.inverse_kinematic(scene.target_c)
-    #
-    #         print("s1, s2: ", s1, s2)
-    #         solution, d1, d2 = scene.choose_ik_with_min_j_distance(s1, s2)
-    #         print("d1 ,d2 :", d1, d2)
-    #     scene.move_to_joint_pose(solution[0], solution[1])
-
-    # target_c = scene.set_random_target_c()
-    # while True:
-    #     step += 1
-    #     if step == 1:
-    #         scene.choose_collision_free_ik_solution(target_c)
-    #     action = scene.inverse_kinematics_controller()
-    #     if LA.norm(action) > 1:
-    #         print("action :", LA.norm(action))
-    #         #print("det :", det)
-    #         scene.render()
-    #         time.sleep(2)
-    #     scene.robot.move_delta(action[0], action[1])
-    #     if scene.collision_check():
-    #         print("collision reset.")
-    #         scene.random_valid_pose()
-    #         target_c = scene.set_random_target_c()
-    #         step = 0
-    #     if scene.check_target_reached():
-    #         print("succ reset.")
-    #         scene.random_valid_pose()
-    #         target_c = scene.set_random_target_c()
-    #         step = 0
-    #     if step > 100:
-    #         print("over step reset.")
-    #         scene.random_valid_pose()
-    #         target_c = scene.set_random_target_c()
-    #         step = 0
-    #     scene.render()

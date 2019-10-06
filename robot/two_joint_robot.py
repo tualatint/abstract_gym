@@ -102,19 +102,27 @@ class TwoJointRobot:
         self.joint_2 += d2
         self.joint_range_check()
 
-    def acceleration_control_step(self, acc, k=0.02):
+    def joint_speed_limit(self, j, limit=0.3):
+        if j > limit:
+            j = limit
+        if j < -limit:
+            j = -limit
+        return j
+
+
+    def acceleration_control_step(self, acc, damping=0.707, joint_speed_limit=0.05):
         """
         Control the joint movement according to acceleration.
         :param acc:
-        :param k: damping
+        :param damping: damping value
         :return:
         """
         j1_speed = copy.deepcopy(self.j1_speed)
         j2_speed = copy.deepcopy(self.j2_speed)
         self.joint_1 += j1_speed
         self.joint_2 += j2_speed
-        self.j1_speed = acc[0] + j1_speed * (1.0 - k)
-        self.j2_speed = acc[1] + j2_speed * (1.0 - k)
+        self.j1_speed = self.joint_speed_limit(acc[0] + j1_speed * damping, limit=joint_speed_limit)
+        self.j2_speed = self.joint_speed_limit(acc[1] + j2_speed * damping, limit=joint_speed_limit)
         self.joint_range_check()
 
     def joint_range_check(self):

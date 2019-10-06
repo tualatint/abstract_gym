@@ -27,7 +27,7 @@ class RepulsiveForce:
         force_list = []
         for p in self.list_of_line_points:
             r = euclidean_distance_square(self.obstacle_center, p)
-            f = self.force_coeff * 1.0 / r * np.array([(p.x - self.obstacle_center.x), (p.y - self.obstacle_center.y)])
+            f = self.force_coeff * 1.0 / pow(r, 2) * np.array([(p.x - self.obstacle_center.x), (p.y - self.obstacle_center.y)])
             force_list.append(f)
         force_list = np.array(force_list)
         normalized_total_force = force_list.sum(axis=0) / self.resolution
