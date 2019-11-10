@@ -25,9 +25,13 @@ class RepulsiveForce:
         :return:
         """
         force_list = []
+        r2_limit = 0.25
         for p in self.list_of_line_points:
-            r = euclidean_distance_square(self.obstacle_center, p)
-            f = self.force_coeff * 1.0 / pow(r, 2) * np.array([(p.x - self.obstacle_center.x), (p.y - self.obstacle_center.y)])
+            r2 = euclidean_distance_square(self.obstacle_center, p)
+            if r2 > r2_limit:
+                f = np.array([0, 0])
+            else:
+                f = self.force_coeff * 1.0 / pow(r2, 2) * np.array([(p.x - self.obstacle_center.x), (p.y - self.obstacle_center.y)])
             force_list.append(f)
         force_list = np.array(force_list)
         normalized_total_force = force_list.sum(axis=0) / self.resolution
