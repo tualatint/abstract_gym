@@ -398,6 +398,12 @@ class Scene:
             self.robot.joint_2 = np.random.rand() * np.pi * 2.0
             condition = self.collision_check()
 
+    def set_to_pose(self, j1, j2):
+        self.robot.j1_speed = 0
+        self.robot.j2_speed = 0
+        self.robot.joint_1 = j1
+        self.robot.joint_2 = j2
+
     def random_virtual_valid_pose(self):
         condition = True
         while condition:
@@ -424,10 +430,11 @@ class Scene:
             self.robot.joint_1 += alpha * (target_j1 - init_j1)
             self.robot.joint_2 += alpha * (target_j2 - init_j2)
             self.render()
-            # if scene.check_target_reached():
-            #     print("succ reset.")
+            if self.check_target_reached():
+                print("succ reset.")
             #     self.random_valid_pose()
-            # if scene.collision_check():
+            if self.collision_check():
+                print("collision occurred.")
             #     print("collision reset.")
             #     scene.random_valid_pose()
         self.robot.joint_range_check()
@@ -553,7 +560,7 @@ class Scene:
 
     def follow_path_controller(self, path):
         for p in path:
-            self.move_to_joint_pose(p.j1, p.j2, 5)
+            self.move_to_joint_pose(p.j1, p.j2, 50)
 
 if __name__ == "__main__":
     obs_rate = 0.03
