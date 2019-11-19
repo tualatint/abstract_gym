@@ -429,15 +429,19 @@ class Scene:
         for i in range(steps):
             self.robot.joint_1 += alpha * (target_j1 - init_j1)
             self.robot.joint_2 += alpha * (target_j2 - init_j2)
-            self.render()
+            self.robot.joint_range_check()
+            if self.vis:
+                self.render()
             if self.check_target_reached():
                 print("succ reset.")
+                return True
             #     self.random_valid_pose()
             if self.collision_check():
-                print("collision occurred.")
+                print("collision occurred.....")
+                return False
             #     print("collision reset.")
             #     scene.random_valid_pose()
-        self.robot.joint_range_check()
+
 
     def generate_random_target_c(self):
         """
@@ -560,7 +564,10 @@ class Scene:
 
     def follow_path_controller(self, path):
         for p in path:
-            self.move_to_joint_pose(p.j1, p.j2, 50)
+            result = self.move_to_joint_pose(p.j1, p.j2, 50)
+            if result == False:
+                return result
+        return True
 
 if __name__ == "__main__":
     obs_rate = 0.03

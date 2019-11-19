@@ -118,7 +118,10 @@ class Planer:
             self.path.append(self.goal_point)
             return self.path
         value_array = self.evaluate_v_score()
-        _, sorted_ind = torch.sort(value_array)
+        s_arr, sorted_ind = torch.sort(value_array.view(-1, 1), axis=0, descending=True)
+        #print("value array :", value_array.view(-1, 1))
+        #print("s arr :", s_arr)
+        #print("sorted ind :", sorted_ind)
         num_positive = torch.sum(connectivity_array)
         print("connected points sum: ", num_positive)
         for i in sorted_ind:
@@ -127,6 +130,7 @@ class Planer:
                 print("Adding via point", self.uniform_nodes[int(i)].j1, self.uniform_nodes[int(i)].j2)
                 self.path.append(self.goal_point)
                 return self.path
+        print("connectivity array:", connectivity_array)
         print("Via point not found.")
 
     def plan(self,start_point, goal_point):
@@ -154,7 +158,7 @@ if __name__ == "__main__":
     obs_rate = 0.03
     damping_ratio = np.sqrt(2.0)/2.0
     random_obstacle = False
-    vis = True
+    vis = False
     occ = OccupancyGrid(random_obstacle=random_obstacle, obstacle_probability=obs_rate)
     scene = Scene(visualize=vis, env=occ)
     step = 0
@@ -169,6 +173,7 @@ if __name__ == "__main__":
     planner = Planer(scene, connectivity_net, value_net)
 
     while True:
+        print("---- trial {} ----".format(trial))
         target_c = scene.set_random_target_c()
         solution = scene.choose_collision_free_ik_solution(target_c)
         #start_point = Vertex(1.0, -0.4)
@@ -178,9 +183,14 @@ if __name__ == "__main__":
         goal_point = Vertex(solution[0], solution[1])
         path = planner.plan(start_point, goal_point)
         if path is not None:
-            scene.follow_path_controller(path)
+            result = scene.follow_path_controller(path)
+            if result == True:
+                succ += 1
         planner.reset()
         scene.random_valid_pose()
+        trial += 1
+        if trial%100 == 0:
+            print("succ rate: {:.4f} in {} trials.".format(succ / trial, trial))
     # while True:
     #     step += 1
     #     alpha = 0.6
