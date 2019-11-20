@@ -5,7 +5,7 @@ import random
 
 import __init__
 from abstract_gym.utils.dataloader import Sampler, read_file_into_list, read_file_into_sars_list
-
+from abstract_gym.utils.db_data_type import Trial_data, SAR_point, Saqt_point
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -15,6 +15,7 @@ class BellmanUpdater:
     Update the Q target according to bellman equation:
     Q_t(s,a) = r + max_a' Q_w(s',a')
     """
+
     def __init__(self, q_net, sars, stage=0):
         self.q_net = q_net
         self.batch_size = sars.shape[0]
@@ -60,6 +61,74 @@ class BellmanUpdater:
 
     def get_labeled_data(self):
         return self.s1a1, self.calculate_qt()
+
+
+class BellmanUpdater2:
+    """
+    update the Q value in scene 1 where the action is acceleration
+    Q_t(s,a) = r + max_a' Q_w(s',a')
+    """
+
+    def __init__(self, q_net, sarst):
+        """
+        sarst = (j1c, j2c, a1, a2, r, v11, v12, j1n, j2n, v21, v22, j1t, j2t, primary_id)
+        """
+        self.q_net = q_net
+        self.sarst = sarst
+        self.batch_size = sarst.shape[0]
+        # s a  = j1, j2, v1, v2, jt1, jt2, a1, a2
+        self.s1a1 = torch.cat((self.sarst[:, 0:2], self.sarst[:, 5:7], self.sarst[:, 11:13], self.sarst[:, 2:4]), 1)
+        self.s2 = self.sarst[:, 7:13]
+        self.r1 = self.sarst[:, 4]
+        self.id = self.sarst[:, 13]
+        self.state_vec_length = 6
+
+    def calculate_qt(self):
+        max_q_value = self.sample_max_q_value()
+        ending_mask = torch.where(self.r1 != (-1.0 * torch.ones(self.r1.size()).to(dtype=torch.double)), torch.ones(self.r1.size()), torch.zeros(self.r1.size()))
+        normal_mask = torch.where(ending_mask != torch.ones(self.r1.size()), torch.ones(self.r1.size()), torch.zeros(self.r1.size()))
+        ending_mask = ending_mask.to(device, dtype=torch.float)
+        normal_mask = normal_mask.to(device, dtype=torch.float)
+        beta = 0.99  # discount value
+        qt = (max_q_value * beta + self.r1.to(device, dtype=torch.float)) * normal_mask + ending_mask * self.r1.to(device, dtype=torch.float)
+        return qt
+
+    def sample_max_q_value(self, sample_size=500, scale_factor=0.03):
+        '''
+        action in range (-0.094247, 0.094247)
+        :param sample_size:
+        :param scale_factor:
+        :return:
+        '''
+        action_list = (np.random.rand(sample_size * self.batch_size, 2) - 0.5) * 2 * np.pi * scale_factor
+        action_list = torch.Tensor(action_list)
+        x = torch.repeat_interleave(self.s2, sample_size)
+        x = x.reshape(self.batch_size, -1, sample_size)
+        x = torch.transpose(x, 2, 1)
+        state_list = x.reshape(-1, self.state_vec_length).to(dtype=torch.float)
+        input_x = torch.cat((state_list, action_list), 1)
+        input_x = input_x.to(device, dtype=torch.float)
+        try:
+            with torch.no_grad():
+                q_list = self.q_net.forward(input_x)
+        finally:
+            pass
+        q_list = q_list.reshape(-1, sample_size)
+        max_q, _ = torch.max(q_list, 1)
+        return max_q
+
+    def get_labeled_data(self):
+        sa = self.s1a1
+        qt = self.calculate_qt()
+        # saqt = (id, j0s, j1s, v0s, v1s, j0t, j1t, a0, a1, qt):
+        saqt_list = []
+        for idx in range(self.batch_size):
+            saqt = Saqt_point(int(self.id[idx].item()), sa[idx, 0].item(), sa[idx, 1].item(), sa[idx, 2].item(),
+                              sa[idx, 3].item(),
+                              sa[idx, 4].item(), sa[idx, 5].item(), sa[idx, 6].item(), sa[idx, 7].item(),
+                              qt=qt[idx].item())
+            saqt_list.append(saqt)
+        return saqt_list
 
 
 class RingOfflineData:
@@ -139,7 +208,7 @@ class RingBuffer:
         self.position = 0
         self.lock = threading.Lock()
 
-    def insert_labeled_data(self,  sa, qt):
+    def insert_labeled_data(self, sa, qt):
         """Saves a transition."""
         try:
             self.lock.acquire()
@@ -147,6 +216,18 @@ class RingBuffer:
                 self.memory.append(None)
             self.memory[self.position] = [sa, qt]
             self.position = (self.position + 1) % self.capacity
+        finally:
+            self.lock.release()
+
+    def insert_labeled_saqt_batch(self, saqt_batch):
+        """Saves a transition."""
+        try:
+            self.lock.acquire()
+            for saqt in saqt_batch:
+                if len(self.memory) < self.capacity:
+                    self.memory.append(None)
+                self.memory[self.position] = [saqt]
+                self.position = (self.position + 1) % self.capacity
         finally:
             self.lock.release()
 
@@ -192,7 +273,7 @@ class EpsilonGreedyPolicyFunction:
         return action_list[best_index]
 
 
-if __name__ =="__main__":
+if __name__ == "__main__":
     # pass
     a = torch.ones(5, 2)
     b = 2 * torch.ones(5, 2)

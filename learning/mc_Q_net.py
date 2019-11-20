@@ -16,14 +16,11 @@ class Q_net(torch.nn.Module):
 
     def __init__(self):
         super(Q_net, self).__init__()
-        self.fc1 = torch.nn.Linear(4, 64)
-        self.fc3 = torch.nn.Linear(64, 1)
+        self.net = GeneralNet(4, 1, 0, 64)
         self.lock = threading.Lock()
 
     def forward(self, x):
-        x = self.fc1(x)
-        x = torch.relu(x)
-        x = self.fc3(x)
+        x = self.net(x)
         return x
 
 class Q_net2(torch.nn.Module):
@@ -33,17 +30,11 @@ class Q_net2(torch.nn.Module):
 
     def __init__(self):
         super(Q_net2, self).__init__()
-        self.fc1 = torch.nn.Linear(4, 64)
-        self.fc2 = torch.nn.Linear(64, 64)
-        self.fc3 = torch.nn.Linear(64, 1)
+        self.net = GeneralNet(4, 1, 1, 64)
         self.lock = threading.Lock()
 
     def forward(self, x):
-        x = self.fc1(x)
-        x = torch.relu(x)
-        x = self.fc2(x)
-        x = torch.relu(x)
-        x = self.fc3(x)
+        x = self.net(x)
         return x
 class Q_net3(torch.nn.Module):
     """
@@ -52,20 +43,11 @@ class Q_net3(torch.nn.Module):
 
     def __init__(self):
         super(Q_net3, self).__init__()
-        self.fc1 = torch.nn.Linear(4, 64)
-        self.fc2 = torch.nn.Linear(64, 64)
-        self.fc3 = torch.nn.Linear(64, 64)
-        self.fc4 = torch.nn.Linear(64, 1)
+        self.net = GeneralNet(4, 1, 2, 64)
         self.lock = threading.Lock()
 
     def forward(self, x):
-        x = self.fc1(x)
-        x = torch.sigmoid(x)
-        x = self.fc2(x)
-        x = torch.sigmoid(x)
-        x = self.fc3(x)
-        x = torch.sigmoid(x)
-        x = self.fc4(x)
+        x = self.net(x)
         return x
 
 class Q_net10(torch.nn.Module):
@@ -76,20 +58,59 @@ class Q_net10(torch.nn.Module):
 
     def __init__(self):
         super(Q_net10, self).__init__()
-        self.fc1 = torch.nn.Linear(6, 64)
-        self.fc2 = torch.nn.Linear(64, 64)
-        self.fc3 = torch.nn.Linear(64, 64)
-        self.fc4 = torch.nn.Linear(64, 1)
+        self.net = GeneralNet(6, 1, 2, 64)
         self.lock = threading.Lock()
 
     def forward(self, x):
-        x = self.fc1(x)
+        x = self.net(x)
+        return x
+
+class Q_netx(torch.nn.Module):
+    """
+    A simple 1 hidden layer NN that maps the input of (state, action) pair to a corresponding q value.
+    state = j1, j2, target_cx, target_cy
+    """
+
+    def __init__(self, neuron_size=128):
+        super(Q_netx, self).__init__()
+        self.net = GeneralNet(6, 1, 5, 128)
+
+    def forward(self, x):
+        x = self.net(x)
+        return x
+
+class Plan_net(torch.nn.Module):
+    """
+    A simple 1 hidden layer NN that maps the input of (state, action) pair to a corresponding q value.
+    state = j1, j2, target_cx, target_cy
+    """
+
+    def __init__(self):
+        super(Plan_net, self).__init__()
+        self.net = GeneralNet(4, 2, 2, 128)
+
+    def forward(self, x):
+        x = self.net(x)
+        return x
+
+class GeneralNet(torch.nn.Module):
+    """
+    A General template for all FC network with identical hidden neuron size.
+    """
+    def __init__(self, input_size=4, output_size=2, hidden_layers=5, hidden_neurons=128):
+        super(GeneralNet, self).__init__()
+        self.fc_in = torch.nn.Linear(input_size, hidden_neurons)
+        self.fc = torch.nn.ModuleList([torch.nn.Linear(hidden_neurons, hidden_neurons) for i in range(hidden_layers)])
+        self.fc_out = torch.nn.Linear(hidden_neurons, output_size)
+        self.lock = threading.Lock()
+
+    def forward(self, x):
+        x = self.fc_in(x)
         x = torch.relu(x)
-        x = self.fc2(x)
-        x = torch.relu(x)
-        x = self.fc3(x)
-        x = torch.relu(x)
-        x = self.fc4(x)
+        for l in self.fc:
+            x = l(x)
+            x = torch.relu(x)
+        x = self.fc_out(x)
         return x
 
 def choose_action(q_net, state, action_list):

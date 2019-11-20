@@ -160,7 +160,7 @@ class MySQLInterface:
                 result = self.cursor.fetchone()
                 r_list = list(result)
                 if validate_data(r_list):
-                    return r_list[3:7], r_list[1:3]
+                    return r_list[3:7], r_list[1:3]  # {J0s, J1s, J0e, J1e}, {Succ, Duration}
                 else:
                     print("r list invalid.")
             else:
