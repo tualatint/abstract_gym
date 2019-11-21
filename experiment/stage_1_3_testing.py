@@ -72,9 +72,8 @@ class Planer:
     def resample_on_weight(self, value_array):
         pass
 
-    def connectivity_mask(self, connectivity_array):
+    def connectivity_mask(self, connectivity_array, threshold=2.0):
         z = connectivity_array.clone()
-        threshold = 2.0
         z[connectivity_array >= threshold] = 1.
         z[connectivity_array < threshold] = 0.
         #print("connectivity mask : ", z)
@@ -90,8 +89,8 @@ class Planer:
         m = torch.nn.Sigmoid()
         y0 = m(out0)
         y1 = m(out1)
-        out0 = self.connectivity_mask(out0)
-        out1 = self.connectivity_mask(out1)
+        out0 = self.connectivity_mask(out0, 5.0)
+        out1 = self.connectivity_mask(out1, 5.0)
         out = self.connectivity_mask(out1+out0)
         #print("y", y)
         if out[-1, :] == 1.0:
@@ -109,6 +108,22 @@ class Planer:
         #print("out ", out)
         return out
 
+    def find_min_distance(self, v1, v2):
+        d0 = abs(v1 - v2)
+        d1 = 2 * np.pi - d0
+        d = np.min([d0, d1])
+        return d
+
+    def evaluate_distance(self):
+        distance_list = []
+        for idx, n in enumerate(self.uniform_nodes):
+            d1 = self.find_min_distance(n.j1, self.start_point.j1)
+            d2 = self.find_min_distance(n.j2, self.start_point.j2)
+            d3 = self.find_min_distance(n.j1, self.goal_point.j1)
+            d4 = self.find_min_distance(n.j2, self.goal_point.j2)
+            distance = d1 + d2 + d3 + d4
+            distance_list.append(distance)
+        return distance_list
 
     def generate_path(self):
         self.uniform_sample()
@@ -118,6 +133,9 @@ class Planer:
             self.path.append(self.goal_point)
             return self.path
         value_array = self.evaluate_v_score()
+        distance_list = self.evaluate_distance()
+        distance_list = torch.FloatTensor(distance_list).unsqueeze_(1).to(device)
+        value_array -= distance_list
         s_arr, sorted_ind = torch.sort(value_array.view(-1, 1), axis=0, descending=True)
         #print("value array :", value_array.view(-1, 1))
         #print("s arr :", s_arr)
