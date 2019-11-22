@@ -8,7 +8,7 @@ import random
 import __init__
 from abstract_gym.learning.mc_Q_net import GeneralNet
 from abstract_gym.utils.db_data_type import Trial_data, SAR_point, Saqt_point
-from abstract_gym.utils.mysql_interface import MySQLInterface, TrialDataSampler
+#from abstract_gym.utils.mysql_interface import MySQLInterface, TrialDataSampler
 from abstract_gym.robot.two_joint_robot import TwoJointRobot
 from abstract_gym.environment.occupancy_grid import OccupancyGrid
 from abstract_gym.utils.collision_checker import CollisionChecker
@@ -23,7 +23,7 @@ class Planer:
         self.connectivity_net = connectivity_net
         self.value_net = value_net
         self.uniform_nodes = []
-        self.num_uniform_sample = 2000
+        self.num_uniform_sample = 8000
         self.epsilon = 1e-4
         self.path = []
 
@@ -136,7 +136,7 @@ class Planer:
         distance_list = self.evaluate_distance()
         distance_list = torch.FloatTensor(distance_list).unsqueeze_(1).to(device)
         value_array -= distance_list
-        s_arr, sorted_ind = torch.sort(value_array.view(-1, 1), axis=0, descending=True)
+        s_arr, sorted_ind = torch.sort(value_array.view(-1, 1), dim=0, descending=True)
         #print("value array :", value_array.view(-1, 1))
         #print("s arr :", s_arr)
         #print("sorted ind :", sorted_ind)
@@ -165,18 +165,18 @@ if __name__ == "__main__":
 
     connectivity_net = GeneralNet(4, 1, 3, 128).to(device)
     exsit_model_file = "GN413128_plan_v1_532_1514.pth"
-    connectivity_net.load_state_dict(torch.load("./models/" + exsit_model_file))
+    connectivity_net.load_state_dict(torch.load("./models/" + exsit_model_file, map_location=device))
     print("Load model file to connectivity_net: ", exsit_model_file)
 
     value_net = GeneralNet(8, 1, 8, 128).to(device)
     exsit_model_file = "GN818128_v3_1618_5000.pth"
-    value_net.load_state_dict(torch.load("../models/" + exsit_model_file))
+    value_net.load_state_dict(torch.load("./models/" + exsit_model_file, map_location=device))
     print("Load model file to value_net: ", exsit_model_file)
 
     obs_rate = 0.03
     damping_ratio = np.sqrt(2.0)/2.0
     random_obstacle = False
-    vis = False
+    vis = True
     occ = OccupancyGrid(random_obstacle=random_obstacle, obstacle_probability=obs_rate)
     scene = Scene(visualize=vis, env=occ)
     step = 0
@@ -192,80 +192,24 @@ if __name__ == "__main__":
 
     while True:
         print("---- trial {} ----".format(trial))
-        target_c = scene.set_random_target_c()
-        solution = scene.choose_collision_free_ik_solution(target_c)
-        #start_point = Vertex(1.0, -0.4)
-        #goal_point = Vertex(5.0, 3.0)
-        #scene.set_to_pose(start_point.j1, start_point.j2)
-        start_point = Vertex(scene.robot.joint_1, scene.robot.joint_2)
-        goal_point = Vertex(solution[0], solution[1])
+        #target_c = scene.set_random_target_c()
+        #solution = scene.choose_collision_free_ik_solution(target_c)
+        start_point = Vertex(0.7272166780064488, 0.7690359583210854)
+        goal_point = Vertex(3.9129477772896974, 2.21626101937869)
+        scene.set_to_pose(start_point.j1, start_point.j2)
+        #start_point = Vertex(scene.robot.joint_1, scene.robot.joint_2)
+        #goal_point = Vertex(solution[0], solution[1])
         path = planner.plan(start_point, goal_point)
         if path is not None:
             result = scene.follow_path_controller(path)
             if result == True:
                 succ += 1
+            else:
+                print("start point",start_point.j1, start_point.j2)
+                print("goal point",goal_point.j1, goal_point.j2)
         planner.reset()
-        scene.random_valid_pose()
+        #scene.random_valid_pose()
         trial += 1
         if trial%100 == 0:
             print("succ rate: {:.4f} in {} trials.".format(succ / trial, trial))
-    # while True:
-    #     step += 1
-    #     alpha = 0.6
-    #     beta = 1.0
-    #     while solution is None:
-    #         target_c = scene.set_random_target_c()
-    #         solution = scene.choose_collision_free_ik_solution(target_c)
-    #         start_point = Vertex(scene.robot.joint_1, scene.robot.joint_2)
-    #         goal_point = Vertex(solution[0], solution[1])
-    #         #st = time.time()
-    #         path = planer.plan(start_point, goal_point)
-    #         #et = time.time()
-    #         #prm.visualize()
-    #         #print("time consumption: ", et - st)
-    #
-    #     scene.follow_path_controller(path)
-    #     # solution = scene.choose_collision_free_ik_solution(target_c)
-    #     # target_acc, target_distance = scene.joint_target_acceleration(solution[0], solution[1])
-    #     # repulsive_acc = scene.repulsive_acceleration() * repulsive_scale_factor * np.exp(-1.0 * 1.5/target_distance)
-    #     # current_speed = scene.current_joint_speed_sum()
-    #     # if step > 100 and (step // 100) % 2 == 0 and (step // 50) % 2 == 0:
-    #     #     beta = -1.0
-    #     #     alpha = 0.1
-    #     # random_acc = (np.random.rand(2)-0.5) * 0.3 * (step / 20) * np.exp(-10.0 * current_speed) * np.exp(-1.0 * 0.03 / np.linalg.norm(target_acc))
-    #     # total_acc = alpha * random_acc + beta * target_acc #+ repulsive_acc #+ random_acc
-    #     # if step % 50 == 0:
-    #     #     print("step {}, solution {:.4f} {:.4f}, joint {:.4f} {:.4}, acc :{:.4f} {:.4f}, beta {}".format(step, solution[0], solution[1], scene.robot.joint_1, scene.robot.joint_2, target_acc[0], target_acc[1], beta))
-    #     # scene.acceleration_step_with_wall(total_acc, scale_factor, damping_ratio)
-    #
-    #     if vis:
-    #         scene.render()
-    #     if scene.collision_check():
-    #         if verbose:
-    #             print("collision reset.")
-    #             # print("repulsive_acc {:.4f}".format(np.linalg.norm(repulsive_acc)))
-    #             # print("target_acc {:.4f}".format(np.linalg.norm(target_acc)))
-    #             # print("random_acc {:.4f}".format(np.linalg.norm(random_acc)))
-    #         reset_flag = True
-    #     if scene.check_target_reached():
-    #         succ += 1
-    #         if verbose:
-    #             print("succ reset.")
-    #         reset_flag = True
-    #     if step > 1000:
-    #         if verbose:
-    #             print("over step reset.")
-    #             # print("repulsive_acc {:.4f}".format(np.linalg.norm(repulsive_acc)))
-    #             # print("target_acc {:.4f}".format(np.linalg.norm(target_acc)))
-    #             # print("random_acc {:.4f}".format(np.linalg.norm(random_acc)))
-    #         reset_flag = True
-    #     if reset_flag:
-    #         trial += 1
-    #         occ = OccupancyGrid(random_obstacle=random_obstacle, obstacle_probability=obs_rate)
-    #         scene.updateOcc(occ, vis=vis)
-    #         scene.random_valid_pose()
-    #         solution = None
-    #         step = 0
-    #         reset_flag = False
-    #     if trial % 100 == 0 and step == 0:
-    #             print("succ rate: {:.4f} in {} trials.".format(succ / trial, trial))
+
