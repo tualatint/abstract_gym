@@ -135,7 +135,8 @@ class Planer:
         value_array = self.evaluate_v_score()
         distance_list = self.evaluate_distance()
         distance_list = torch.FloatTensor(distance_list).unsqueeze_(1).to(device)
-        value_array -= distance_list
+        #value_array -= distance_list
+        value_array = distance_list.neg()
         s_arr, sorted_ind = torch.sort(value_array.view(-1, 1), dim=0, descending=True)
         #print("value array :", value_array.view(-1, 1))
         #print("s arr :", s_arr)
@@ -192,23 +193,23 @@ if __name__ == "__main__":
 
     while True:
         print("---- trial {} ----".format(trial))
-        #target_c = scene.set_random_target_c()
-        #solution = scene.choose_collision_free_ik_solution(target_c)
-        start_point = Vertex(0.7272166780064488, 0.7690359583210854)
-        goal_point = Vertex(3.9129477772896974, 2.21626101937869)
+        target_c = scene.set_random_target_c()
+        solution = scene.choose_collision_free_ik_solution(target_c)
+        #start_point = Vertex(6.204576045550165, 2.958556600532148)
+        #goal_point = Vertex(0.7841233488900803, 5.650392294870437)
+        start_point = Vertex(scene.robot.joint_1, scene.robot.joint_2)
+        goal_point = Vertex(solution[0], solution[1])
         scene.set_to_pose(start_point.j1, start_point.j2)
-        #start_point = Vertex(scene.robot.joint_1, scene.robot.joint_2)
-        #goal_point = Vertex(solution[0], solution[1])
         path = planner.plan(start_point, goal_point)
         if path is not None:
-            result = scene.follow_path_controller(path)
+            result = scene.follow_path_controller_with_acc(path)
             if result == True:
                 succ += 1
             else:
-                print("start point",start_point.j1, start_point.j2)
-                print("goal point",goal_point.j1, goal_point.j2)
+                print("start point", start_point.j1, start_point.j2)
+                print("goal point", goal_point.j1, goal_point.j2)
         planner.reset()
-        #scene.random_valid_pose()
+        scene.random_valid_pose()
         trial += 1
         if trial%100 == 0:
             print("succ rate: {:.4f} in {} trials.".format(succ / trial, trial))

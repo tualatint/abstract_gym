@@ -242,7 +242,7 @@ class Scene:
         """
         last_j1 = self.robot.joint_1
         last_j2 = self.robot.joint_2
-        last_v1 = -5.0 * self.robot.j1_speed # collision with the object and bonus back
+        last_v1 = -5.0 * self.robot.j1_speed  # collision with the object and bonus back
         last_v2 = -5.0 * self.robot.j2_speed
         self.robot.acceleration_control_step(acc * acc_scale_factor, damping=damping, joint_speed_limit=joint_speed_limit)
         if self.collision_check():
@@ -569,6 +569,25 @@ class Scene:
                 return result
         return True
 
+    def check_joint_via_reached(self, j1, j2):
+        epsilon = 2e-3
+        if abs(self.robot.joint_1 - j1) < epsilon and abs(
+                self.robot.joint_2 - j2) < epsilon:
+            return True
+        else:
+            return False
+
+    def follow_path_controller_with_acc(self, path):
+        scale_factor = 0.8
+        damping_ratio = np.sqrt(2.0)/2.0
+        for p in path:
+            while not self.check_joint_via_reached(p.j1, p.j2):
+                target_acc, target_distance = self.joint_target_acceleration(p.j1, p.j2)
+                _, _, _, done, collision = self.acceleration_step(target_acc, scale_factor, damping_ratio)
+                if collision:
+                    return False
+        return True
+
 if __name__ == "__main__":
     obs_rate = 0.03
     damping_ratio = np.sqrt(2.0)/2.0
@@ -605,19 +624,19 @@ if __name__ == "__main__":
             #prm.visualize()
             print("time consumption: ", et - st)
 
-        scene.follow_path_controller(path)
+        #scene.follow_path_controller(path)
         # solution = scene.choose_collision_free_ik_solution(target_c)
-        # target_acc, target_distance = scene.joint_target_acceleration(solution[0], solution[1])
-        # repulsive_acc = scene.repulsive_acceleration() * repulsive_scale_factor * np.exp(-1.0 * 1.5/target_distance)
-        # current_speed = scene.current_joint_speed_sum()
-        # if step > 100 and (step // 100) % 2 == 0 and (step // 50) % 2 == 0:
-        #     beta = -1.0
-        #     alpha = 0.1
-        # random_acc = (np.random.rand(2)-0.5) * 0.3 * (step / 20) * np.exp(-10.0 * current_speed) * np.exp(-1.0 * 0.03 / np.linalg.norm(target_acc))
-        # total_acc = alpha * random_acc + beta * target_acc #+ repulsive_acc #+ random_acc
-        # if step % 50 == 0:
-        #     print("step {}, solution {:.4f} {:.4f}, joint {:.4f} {:.4}, acc :{:.4f} {:.4f}, beta {}".format(step, solution[0], solution[1], scene.robot.joint_1, scene.robot.joint_2, target_acc[0], target_acc[1], beta))
-        # scene.acceleration_step_with_wall(total_acc, scale_factor, damping_ratio)
+        target_acc, target_distance = scene.joint_target_acceleration(solution[0], solution[1])
+        repulsive_acc = scene.repulsive_acceleration() * repulsive_scale_factor * np.exp(-1.0 * 1.5/target_distance)
+        current_speed = scene.current_joint_speed_sum()
+        if step > 100 and (step // 100) % 2 == 0 and (step // 50) % 2 == 0:
+            beta = -1.0
+            alpha = 0.1
+        random_acc = (np.random.rand(2)-0.5) * 0.3 * (step / 20) * np.exp(-10.0 * current_speed) * np.exp(-1.0 * 0.03 / np.linalg.norm(target_acc))
+        total_acc = alpha * random_acc + beta * target_acc #+ repulsive_acc #+ random_acc
+        if step % 50 == 0:
+            print("step {}, solution {:.4f} {:.4f}, joint {:.4f} {:.4}, acc :{:.4f} {:.4f}, beta {}".format(step, solution[0], solution[1], scene.robot.joint_1, scene.robot.joint_2, target_acc[0], target_acc[1], beta))
+        scene.acceleration_step_with_wall(total_acc, scale_factor, damping_ratio)
 
         if vis:
             scene.render()
